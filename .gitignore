@@ -31,3 +31,6 @@ coverage.out
 
 # OS files
 Thumbs.db
+
+# Local ODD planning mirror (kept in Engram, not in git)
+/odd/
