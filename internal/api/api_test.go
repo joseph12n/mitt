@@ -366,3 +366,24 @@ func TestExpenseAddList(t *testing.T) {
 		})
 	}
 }
+
+// TestDashboardRootPublicUnknownNotFound covers server-level routing: the
+// dashboard page is public HTML on GET / while unknown paths stay 404.
+func TestDashboardRootPublicUnknownNotFound(t *testing.T) {
+	h, _ := openTestAPI(t, testToken)
+
+	root := httptest.NewRequest(http.MethodGet, "/", nil)
+	rootRec := httptest.NewRecorder()
+	h.ServeHTTP(rootRec, root)
+	if rootRec.Code != http.StatusOK {
+		t.Fatalf("GET / = %d, want 200", rootRec.Code)
+	}
+	if ct := rootRec.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Fatalf("GET / Content-Type = %q, want text/html", ct)
+	}
+
+	miss := doRequest(t, h, http.MethodGet, "/nope", "", testToken)
+	if miss.Code != http.StatusNotFound {
+		t.Fatalf("GET /nope = %d, want 404", miss.Code)
+	}
+}

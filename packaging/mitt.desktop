@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=mitt Bar
+Comment=Bar POS: abre el tablero en el navegador
+Exec=xdg-open http://localhost:8080/
+Terminal=false
+Type=Application
+Categories=Office;Finance;
+Icon=mitt
+StartupNotify=false

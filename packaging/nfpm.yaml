@@ -1,6 +1,6 @@
 # nFPM package definition for mitt (rpm + deb), built user-space, no root.
 name: mitt
-version: 0.1.0
+version: 0.1.1
 release: 1
 arch: amd64
 maintainer: mitt contributors
@@ -20,6 +20,14 @@ contents:
     dst: /usr/share/doc/mitt/README.md
   - src: LICENSE
     dst: /usr/share/licenses/mitt/LICENSE
+  - src: packaging/mitt.desktop
+    dst: /usr/share/applications/mitt.desktop
+    file_info:
+      mode: 0644
+  - src: packaging/mitt.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/mitt.svg
+    file_info:
+      mode: 0644
 scripts:
   postinstall: packaging/postinstall.sh
 overrides:
@@ -37,3 +45,11 @@ overrides:
         dst: /usr/share/doc/mitt/README.md
       - src: LICENSE
         dst: /usr/share/doc/mitt/LICENSE
+      - src: packaging/mitt.desktop
+        dst: /usr/share/applications/mitt.desktop
+        file_info:
+          mode: 0644
+      - src: packaging/mitt.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/mitt.svg
+        file_info:
+          mode: 0644

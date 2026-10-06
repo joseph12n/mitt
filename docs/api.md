@@ -26,3 +26,7 @@ Notes:
 - Closing an already-closed tab returns 404 (only open tabs are addressable).
 - `422` always carries the domain validation message for debugging.
 - Unknown paths return JSON `404`; wrong-method use returns the stdlib `405`.
+
+Human dashboard: `GET /` serves the embedded staff page with no auth and
+no JSON envelope. It is not part of this JSON API; every route above keeps
+its pairing-token contract unchanged.

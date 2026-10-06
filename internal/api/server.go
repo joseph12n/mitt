@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"mitt/internal/store"
+	"mitt/internal/web"
 )
 
 // Server wires domain-validated HTTP handlers over the SQLite store.
@@ -31,10 +32,29 @@ func New(s *store.Store, token string) http.Handler {
 	mux.HandleFunc("POST /api/tabs/{id}/close", srv.handleTabClose)
 	mux.HandleFunc("GET /api/expenses", srv.handleExpensesList)
 	mux.HandleFunc("POST /api/expenses", srv.handleExpenseCreate)
+	// GET / serves the human dashboard last: mux longest-match keeps every
+	// /api route first, and only the exact root path gets the page while any
+	// other unmatched path stays a 404.
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		web.Handler().ServeHTTP(w, r)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "unknown endpoint")
 	})
-	return AuthMiddleware(token, mux)
+	// The dashboard page is public so bar staff browsers can load it
+	// without a token; every other route stays behind pairing auth.
+	authed := AuthMiddleware(token, mux)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		authed.ServeHTTP(w, r)
+	})
 }
 
 // handleHealth reports liveness without auth so clients can find the hub.
