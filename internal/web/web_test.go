@@ -20,5 +20,12 @@ func TestHandlerServesDashboard(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "MESAS") {
 		t.Fatalf("dashboard body misses MESAS section (%d bytes)", len(body))
+	} else {
+		// Pill must verify the token server-side instead of trusting storage.
+		for _, want := range []string{"VERIFICANDO", "INVÁLIDO", "checkToken"} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("dashboard body misses pill verification %q", want)
+			}
+		}
 	}
 }

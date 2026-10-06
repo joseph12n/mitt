@@ -21,6 +21,6 @@ pkg-rpm: build-linux
 
 pkg-deb: build-linux
 	mkdir -p dist
-	nfpm package --config packaging/nfpm.yaml --packager deb --target dist/mitt_0.1.1_amd64.deb
+	nfpm package --config packaging/nfpm.yaml --packager deb --target dist/mitt_0.1.2_amd64.deb
 
 pkg: pkg-rpm pkg-deb

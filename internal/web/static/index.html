@@ -133,10 +133,23 @@ async function api(method, path, data){
   try { return JSON.parse(text); } catch (e) { fail(res.status, ""); return null; }
 }
 
-function paintPill(){
+// Quiet probe: does the saved token actually work? Never toasts by itself.
+async function checkToken(){
+  try {
+    var res = await fetch(base + "/api/products", { headers: { "Authorization": "Bearer " + token } });
+    return res.ok;
+  } catch (e) { return false; }
+}
+
+async function paintPill(){
   var p = $("pill");
-  if (token){ p.textContent = "CONECTADO"; p.className = "pill on"; }
-  else { p.textContent = "SIN TOKEN"; p.className = "pill off"; }
+  if (!token){ p.textContent = "SIN TOKEN"; p.className = "pill off"; return; }
+  p.textContent = "VERIFICANDO…"; p.className = "pill off";
+  var probed = token;
+  var ok = await checkToken();
+  if (token !== probed) return; // user typed a new token while probing
+  p.textContent = ok ? "CONECTADO" : "INVÁLIDO";
+  p.className = ok ? "pill on" : "pill off";
 }
 
 // Accept a pasted "mitt://pair?url=..&token=.." link: extract token and base URL.
