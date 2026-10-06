@@ -129,6 +129,34 @@ make build-windows  # ./mitt-windows-amd64.exe
 Single static-ish binaries (Go + pure-Go SQLite, no CGO), so they run from
 Windows 10 up and on any mainstream Linux distro with no extra runtime.
 
+### Install on Fedora / Debian-Ubuntu (v0.1.0)
+
+```bash
+make pkg  # needs nfpm on PATH; builds dist/*.rpm and dist/*.deb, no root
+```
+
+Fedora:
+
+```bash
+sudo dnf install ./dist/mitt-0.1.0-1.x86_64.rpm
+```
+
+Debian/Ubuntu:
+
+```bash
+sudo apt install ./dist/mitt_0.1.0_amd64.deb
+```
+
+Then enable the service and read the pairing token from the logs:
+
+```bash
+sudo systemctl enable --now mitt
+journalctl -u mitt
+```
+
+Data lives in `/var/lib/mitt`. Packages are unsigned v0.1.0 builds; set a
+fixed token with `sudo systemctl edit mitt` (`Environment=MITT_TOKEN=...`).
+
 ## Project layout
 
 | Path                          | Purpose                                              |

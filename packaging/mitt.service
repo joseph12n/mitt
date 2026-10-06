@@ -1,0 +1,19 @@
+# Fixed pairing token: the binary reads MITT_TOKEN from the environment
+# (see resolveToken in cmd/mitt/main.go: -token flag, then MITT_TOKEN, then random).
+# Run `sudo systemctl edit mitt` and add:
+#   [Service]
+#   Environment=MITT_TOKEN=your-token-here
+# then `sudo systemctl restart mitt`.
+[Unit]
+Description=mitt bar POS hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=mitt
+ExecStart=/usr/bin/mitt -db /var/lib/mitt/mitt.db -addr :8080
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

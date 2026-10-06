@@ -1,4 +1,4 @@
-.PHONY: tidy vet test build-linux build-windows
+.PHONY: tidy vet test build-linux build-windows pkg-rpm pkg-deb pkg
 
 tidy:
 	go mod tidy
@@ -14,3 +14,13 @@ build-linux:
 
 build-windows:
 	GOOS=windows GOARCH=amd64 go build -o bin/mitt-windows.exe ./cmd/mitt
+
+pkg-rpm: build-linux
+	mkdir -p dist
+	nfpm package --config packaging/nfpm.yaml --packager rpm --target dist/
+
+pkg-deb: build-linux
+	mkdir -p dist
+	nfpm package --config packaging/nfpm.yaml --packager deb --target dist/mitt_0.1.0_amd64.deb
+
+pkg: pkg-rpm pkg-deb
