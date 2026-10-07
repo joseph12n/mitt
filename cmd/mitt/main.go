@@ -21,28 +21,19 @@ import (
 
 // resolveToken applies the pairing token precedence: -token flag first,
 // then the MITT_TOKEN environment variable, then a random token generated
-// for this run. It reports whether the token was generated.
-func resolveToken(flagToken string) (string, bool, error) {
+// for this run. It reports where the token came from: flag, env or random.
+func resolveToken(flagToken string) (token, source string, err error) {
 	if flagToken != "" {
-		return flagToken, false, nil
+		return flagToken, "flag", nil
 	}
 	if env := os.Getenv("MITT_TOKEN"); env != "" {
-		return env, false, nil
+		return env, "env", nil
 	}
-	token, err := api.GenerateToken()
+	token, err = api.GenerateToken()
 	if err != nil {
-		return "", false, err
+		return "", "", err
 	}
-	return token, true, nil
-}
-
-// maskToken returns a first-4-chars hint for logs so the full token never
-// lands in log files.
-func maskToken(token string) string {
-	if len(token) <= 4 {
-		return "…"
-	}
-	return token[:4] + "…"
+	return token, "random", nil
 }
 
 // defaultDBPath returns mitt.db next to the running binary.
@@ -86,13 +77,15 @@ func main() {
 		log.Fatalf("unknown -ui mode %q: want none|snapshot", *uiFlag)
 	}
 
-	token, generated, err := resolveToken(*tokenFlag)
+	token, source, err := resolveToken(*tokenFlag)
 	if err != nil {
 		log.Fatalf("resolve pairing token: %v", err)
 	}
-	if generated {
+	if source == "random" {
 		// Printed once to stdout for the first pairing; never committed.
-		fmt.Printf("pairing token: %s\n", token)
+		// Stable setups (flag/env/file) never print the secret: it lives
+		// where the owner put it.
+		fmt.Printf("pairing token (random, save it now): %s\n", token)
 	}
 
 	srv := &http.Server{
@@ -105,7 +98,11 @@ func main() {
 			log.Fatalf("serve LAN API: %v", err)
 		}
 	}()
-	log.Printf("mitt PC hub ready on %s (token %s)", *addrFlag, maskToken(token))
+	if source == "random" {
+		log.Printf("mitt PC hub ready on %s (random token printed above; set MITT_TOKEN to keep it stable)", *addrFlag)
+	} else {
+		log.Printf("mitt PC hub ready on %s (stable token from %s)", *addrFlag, source)
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
