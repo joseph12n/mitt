@@ -386,4 +386,17 @@ func TestDashboardRootPublicUnknownNotFound(t *testing.T) {
 	if miss.Code != http.StatusNotFound {
 		t.Fatalf("GET /nope = %d, want 404", miss.Code)
 	}
+
+	// Bundled assets must load without a token or the page stays blank:
+	// the test bundle is unbuilt, so any non-401 (here 404) proves the
+	// request reached the public static handler instead of the auth wall.
+	asset := doRequest(t, h, http.MethodGet, "/assets/index-test.js", "", "")
+	if asset.Code == http.StatusUnauthorized {
+		t.Fatalf("GET /assets/* without token = 401, want public (non-401)")
+	}
+
+	favicon := doRequest(t, h, http.MethodGet, "/favicon.ico", "", "")
+	if favicon.Code != http.StatusNoContent {
+		t.Fatalf("GET /favicon.ico = %d, want 204", favicon.Code)
+	}
 }

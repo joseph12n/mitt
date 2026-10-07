@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"mitt/internal/store"
 	"mitt/internal/web"
@@ -36,9 +37,10 @@ func New(s *store.Store, token, advertise, addr string) http.Handler {
 	mux.HandleFunc("POST /api/tabs/{id}/close", srv.handleTabClose)
 	mux.HandleFunc("GET /api/expenses", srv.handleExpensesList)
 	mux.HandleFunc("POST /api/expenses", srv.handleExpenseCreate)
-	// GET / serves the human dashboard last: mux longest-match keeps every
+	// GET / serves the human dashboard: mux longest-match keeps every
 	// /api route first, and only the exact root path gets the page while any
-	// other unmatched path stays a 404.
+	// other unmatched path stays a 404. The outer handler also serves this
+	// same page publicly (no token); see below.
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -49,12 +51,17 @@ func New(s *store.Store, token, advertise, addr string) http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "unknown endpoint")
 	})
-	// The dashboard page is public so bar staff browsers can load it
-	// without a token; every other route stays behind pairing auth.
+	// The dashboard page and its fingerprinted bundles are public so staff
+	// browsers load them without a token; the JSON API stays behind pairing
+	// auth. Browsers also probe /favicon.ico on their own.
 	authed := AuthMiddleware(token, mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/" {
-			mux.ServeHTTP(w, r)
+		if r.Method == http.MethodGet && (r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/assets/")) {
+			web.Handler().ServeHTTP(w, r)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/favicon.ico" {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		authed.ServeHTTP(w, r)
