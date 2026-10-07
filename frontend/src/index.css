@@ -94,6 +94,93 @@ body {
   }
 }
 
+/* Sticky operations top bar: opaque bar-surface so KPIs stay scannable. */
+.mitt-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--mitt-surface-raised);
+  background: rgba(18, 20, 23, 0.94);
+  backdrop-filter: blur(8px);
+}
+
+/* Press feedback: instant tactile confirm on every button (150ms ease-out). */
+.mitt-press {
+  transition: transform 160ms ease-out, filter 160ms ease-out;
+}
+
+.mitt-press:active {
+  transform: scale(0.97);
+}
+
+/* Mesa card entrance: rise from 0.95 + fade, staggered per index via inline
+   animation-delay. Transform/opacity only (GPU), under 300ms for flow. */
+.mitt-enter {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  animation: mitt-rise 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes mitt-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Manual-connection disclosure: summary reads as a 48px ghost button. */
+.mitt-details > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mitt-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Toast: same-direction enter, transform/opacity only. */
+.mitt-toast {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  animation: mitt-toast-in 200ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes mitt-toast-in {
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--mitt-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mitt-enter,
+  .mitt-toast {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .mitt-toast {
+    transform: translate(-50%, 0);
+  }
+
+  .mitt-press {
+    transition: none;
+  }
+
+  .mitt-press:active {
+    transform: none;
+  }
+}
+
 /* Money: mono-numeric tabular figures so columns align (token mono-numeric). */
 .money {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

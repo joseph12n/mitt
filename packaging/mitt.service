@@ -10,6 +10,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+# Stable pairing token generated once at install (see postinstall.sh);
+# override with `systemctl edit mitt` if needed.
+EnvironmentFile=-/etc/mitt/pairing.env
 DynamicUser=yes
 StateDirectory=mitt
 ExecStart=/usr/bin/mitt -db /var/lib/mitt/mitt.db -addr :8080

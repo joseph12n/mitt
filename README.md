@@ -129,7 +129,7 @@ make build-windows  # ./mitt-windows-amd64.exe
 Single static-ish binaries (Go + pure-Go SQLite, no CGO), so they run from
 Windows 10 up and on any mainstream Linux distro with no extra runtime.
 
-### Install on Fedora / Debian-Ubuntu (v0.1.4)
+### Install on Fedora / Debian-Ubuntu (v0.1.5)
 
 ```bash
 make pkg  # needs nfpm on PATH; builds dist/*.rpm and dist/*.deb, no root
@@ -138,28 +138,30 @@ make pkg  # needs nfpm on PATH; builds dist/*.rpm and dist/*.deb, no root
 Fedora:
 
 ```bash
-sudo dnf install ./dist/mitt-0.1.4-1.x86_64.rpm
+sudo dnf install ./dist/mitt-0.1.5-1.x86_64.rpm
 ```
 
 Debian/Ubuntu:
 
 ```bash
-sudo apt install ./dist/mitt_0.1.4_amd64.deb
+sudo apt install ./dist/mitt_0.1.5_amd64.deb
 ```
 
-Then enable the service and read the pairing token from the logs:
+Then enable the service. The token is stable now: the package generates it once
+into `/etc/mitt/pairing.env` and it survives restarts and upgrades, so scan the
+dashboard QR a single time:
 
 ```bash
 sudo systemctl enable --now mitt
-journalctl -u mitt
 ```
 
 The package adds a **mitt Bar** launcher to the app menu: it opens the dashboard
 in the browser (`http://localhost:8080/`) with tables, catalog, tabs and expenses.
-Paste the journal token once — the page remembers it.
+Scan the QR once — the page remembers the pairing.
 
-Data lives in `/var/lib/mitt`. Packages are unsigned v0.1.4 builds; set a
-fixed token with `sudo systemctl edit mitt` (`Environment=MITT_TOKEN=...`).
+Data lives in `/var/lib/mitt`. Packages are unsigned v0.1.5 builds. To rotate the
+token, replace `/etc/mitt/pairing.env` (or override with `sudo systemctl edit mitt`,
+`Environment=MITT_TOKEN=...`) and restart.
 
 ## Project layout
 
