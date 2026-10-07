@@ -5,20 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>mitt · Panel del bar</title>
     <script>
-      // Pre-paint theme: persist the sidebar toggle, fall back to the OS
-      // preference, default to dark (night-bar-first). Runs before CSS so
-      // light users never see a dark flash. Branding vars paint later over
-      // either column and never depend on this value.
+      // Pre-paint theme: persist the Personalizar toggle, default to light
+      // (the Figma master is light-first). Runs before CSS so dark users
+      // never see a light flash. Brand vars paint later over either column.
       try {
         var mittTheme = localStorage.getItem('mitt_theme');
         if (mittTheme !== 'light' && mittTheme !== 'dark') {
-          mittTheme = window.matchMedia('(prefers-color-scheme: light)').matches
-            ? 'light'
-            : 'dark';
+          mittTheme = 'light';
         }
-        document.documentElement.dataset.theme = mittTheme;
+        if (mittTheme === 'dark') document.documentElement.classList.add('dark');
       } catch (e) {
-        document.documentElement.dataset.theme = 'dark';
+        // Private mode: light default still paints.
       }
     </script>
   </head>

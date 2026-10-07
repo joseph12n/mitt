@@ -10,7 +10,7 @@ import (
 var schemaSQL string
 
 // schemaVersion is the latest migration level applied by migrate.
-const schemaVersion = 2
+const schemaVersion = 3
 
 // migrate applies the embedded schema when the database is unversioned.
 // It is idempotent: a database already at schemaVersion is left alone.

@@ -1,6 +1,6 @@
--- mitt schema v2: bar POS catalog, tables, tabs, sales, expenses, branding.
--- Applied once when PRAGMA user_version is 0, then user_version is set to 2.
--- Re-applied idempotently over v1 (every statement is IF NOT EXISTS).
+-- mitt schema v3: bar POS catalog, tables, tabs, sales, expenses, suppliers, branding.
+-- Applied once when PRAGMA user_version is 0, then user_version is set to 3.
+-- Re-applied idempotently over v1/v2 (every statement is IF NOT EXISTS).
 
 CREATE TABLE IF NOT EXISTS products(
   id TEXT PRIMARY KEY,
@@ -55,6 +55,14 @@ CREATE TABLE IF NOT EXISTS expenses(
   date TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+
+CREATE TABLE IF NOT EXISTS suppliers(
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name);
 
 CREATE TABLE IF NOT EXISTS branding(
   id INTEGER PRIMARY KEY CHECK(id = 1),

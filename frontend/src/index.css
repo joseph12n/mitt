@@ -1,484 +1,112 @@
 @import 'tailwindcss';
 
-/* mitt design tokens, dark-first (docs/design-tokens.md — copy 1:1, dark column). */
-:root {
-  --mitt-bg: #121417; /* bg */
-  --mitt-surface: #1c1f24; /* surface */
-  --mitt-surface-raised: #262b33; /* surface-raised */
-  --mitt-text: #f2efe6; /* text */
-  --mitt-text-muted: #9aa1ad; /* text-muted */
-  --mitt-accent: #e8a33d; /* accent */
-  --mitt-success: #4caf6d; /* success */
-  --mitt-warn: #e0b13e; /* warn */
-  --mitt-danger: #e05c5c; /* danger */
-  --mitt-on-accent: #1a1206; /* on-accent */
+/* Vendored fonts (latin only, 2 weights each): no remote @import, offline-safe. */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/bricolage-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('./assets/fonts/bricolage-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/figtree-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/figtree-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/dmmono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./assets/fonts/dmmono-500.woff2') format('woff2');
 }
 
-/* Daylight admin theme (docs/design-tokens.md — light column). The
-   pre-paint script in index.html sets data-theme before first paint, so
-   there is no dark flash for light users. Brand vars painted inline by
-   applyBranding() always win over both columns. */
-[data-theme='light'] {
-  --mitt-bg: #f5f3ec;
-  --mitt-surface: #ffffff;
-  --mitt-surface-raised: #edeae0;
-  --mitt-text: #1a1c1e;
-  --mitt-text-muted: #62676f;
-  --mitt-accent: #b97a1a;
-  --mitt-success: #2e7d46;
-  --mitt-warn: #9a6f14;
-  --mitt-danger: #b33737;
-  --mitt-on-accent: #ffffff;
+@theme {
+  --font-display: 'Bricolage Grotesque', sans-serif;
+  --font-sans: 'Figtree', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --color-brand: var(--brand-base, #0e7a5a);
+  --color-sun: var(--sun-base, #f2a33a);
+  --color-on-brand: #ffffff;
+  --color-paper: color-mix(in srgb, var(--brand-base, #0e7a5a) 5%, #f7f6f1);
+  --color-surface: #ffffff;
+  --color-sunk: color-mix(in srgb, var(--brand-base, #0e7a5a) 6%, #efede6);
+  --color-line: color-mix(in srgb, var(--brand-base, #0e7a5a) 8%, #e6e3da);
+  --color-ink: #16201b;
+  --color-mute: #667069;
+  --color-brand-soft: color-mix(in srgb, var(--color-brand) 12%, var(--color-surface));
+  --color-sunink: color-mix(in srgb, var(--color-sun) 40%, #2e1c00);
+  --color-berry: #d6455d;
 }
 
-@theme inline {
-  --color-mitt-bg: var(--mitt-bg);
-  --color-mitt-surface: var(--mitt-surface);
-  --color-mitt-raised: var(--mitt-surface-raised);
-  --color-mitt-text: var(--mitt-text);
-  --color-mitt-muted: var(--mitt-text-muted);
-  --color-mitt-accent: var(--mitt-accent);
-  --color-mitt-success: var(--mitt-success);
-  --color-mitt-warn: var(--mitt-warn);
-  --color-mitt-danger: var(--mitt-danger);
-  --color-mitt-on-accent: var(--mitt-on-accent);
+html.dark {
+  color-scheme: dark;
+  --color-brand: color-mix(in srgb, var(--brand-base, #0e7a5a) 60%, white);
+  --color-on-brand: #0a0e0c;
+  --color-paper: color-mix(in srgb, var(--brand-base, #0e7a5a) 9%, #0e1210);
+  --color-surface: color-mix(in srgb, var(--brand-base, #0e7a5a) 8%, #171c19);
+  --color-sunk: color-mix(in srgb, var(--brand-base, #0e7a5a) 10%, #212724);
+  --color-line: color-mix(in srgb, var(--brand-base, #0e7a5a) 14%, #2a302d);
+  --color-ink: #eef2ef;
+  --color-mute: #98a39c;
+  --color-sunink: var(--color-sun);
+  --color-berry: #ff7088;
 }
 
-html,
+html, body, #root { height: 100%; }
 body {
-  background: var(--mitt-bg);
-  color: var(--mitt-text);
+  transition: background .25s, color .25s;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
-
-/* Night-bar ambience: pure-CSS drifting amber/green glow behind the board.
-   (ReactBits animated backgrounds all require three/ogl/gsap, so the motion
-   here is hand-rolled keyframes — zero extra dependencies, offline-safe.) */
-.mitt-ambient {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  background: var(--mitt-bg);
+::selection { background: var(--color-brand); color: var(--color-on-brand); }
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.field {
+  height: 2.5rem; border-radius: 0.75rem; background: var(--color-sunk);
+  padding: 0 0.875rem; font-size: 0.875rem; border: 1px solid transparent; outline: none;
+  transition: border-color .15s, background .15s;
 }
-
-.mitt-ambient::before,
-.mitt-ambient::after {
-  content: '';
-  position: absolute;
-  width: 60vmax;
-  height: 60vmax;
-  border-radius: 9999px;
-  filter: blur(90px);
-  opacity: 0.16;
+.field:focus { border-color: var(--color-brand); background: var(--color-surface); }
+.btn {
+  height: 2.5rem; padding: 0 1rem; border-radius: 0.75rem; font-size: 0.875rem; font-weight: 600;
+  display: inline-flex; align-items: center; gap: .5rem; justify-content: center; cursor: pointer;
+  transition: transform .12s, background .15s, opacity .15s; white-space: nowrap;
 }
-
-.mitt-ambient::before {
-  background: radial-gradient(circle, var(--mitt-accent) 0%, transparent 65%);
-  top: -18vmax;
-  left: -12vmax;
-  animation: mitt-drift-a 26s ease-in-out infinite alternate;
-}
-
-.mitt-ambient::after {
-  background: radial-gradient(circle, var(--mitt-success) 0%, transparent 65%);
-  bottom: -22vmax;
-  right: -14vmax;
-  animation: mitt-drift-b 32s ease-in-out infinite alternate;
-}
-
-@keyframes mitt-drift-a {
-  from {
-    transform: translate(0, 0) scale(1);
-  }
-  to {
-    transform: translate(9vmax, 7vmax) scale(1.15);
-  }
-}
-
-@keyframes mitt-drift-b {
-  from {
-    transform: translate(0, 0) scale(1.1);
-  }
-  to {
-    transform: translate(-8vmax, -6vmax) scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mitt-ambient::before,
-  .mitt-ambient::after {
-    animation: none;
-  }
-}
-
-/* App shell: sticky left sidebar + content. Under 720px the same sidebar
-   node reflows into a top bar with a horizontal nav (structural collapse,
-   no duplicate nav, no fluid typography). */
-.mitt-shell {
-  display: flex;
-  align-items: stretch;
-}
-
-.mitt-sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  width: 248px;
-  flex: 0 0 248px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 12px;
-  border-right: 1px solid var(--mitt-surface-raised);
-  background: var(--mitt-surface);
-}
-
-.mitt-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 8px;
-  min-width: 0;
-}
-
-.mitt-brand img {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  border-radius: 8px;
-  object-fit: contain;
-  background: var(--mitt-surface-raised);
-}
-
-.mitt-brand-fallback {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 20px;
-  background: var(--mitt-accent);
-  color: var(--mitt-on-accent);
-}
-
-.mitt-brand-name {
-  font-weight: 700;
-  font-size: 17px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mitt-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* Section nav: current section carries the accent edge + label (Operate:
-   selection is accent, never decoration). State-only motion, 160ms. */
-.mitt-navbtn {
-  display: flex;
-  align-items: center;
-  min-height: 48px;
-  padding: 0 12px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  border-left-width: 3px;
-  background: transparent;
-  color: var(--mitt-text);
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 160ms ease-out, border-color 160ms ease-out, transform 160ms ease-out;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .mitt-navbtn:hover {
-    background: var(--mitt-surface-raised);
-  }
-}
-
-.mitt-navbtn:active {
-  transform: scale(0.98);
-}
-
-.mitt-navbtn[aria-current='page'] {
-  background: var(--mitt-surface-raised);
-  border-left-color: var(--mitt-accent);
-}
-
-.mitt-side-foot {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mitt-side-foot .mitt-press {
-  min-height: 48px;
-  justify-content: center;
-}
-
-.mitt-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 0 8px;
-  min-height: 32px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.mitt-dot {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 10px;
-  border-radius: 9999px;
-  background: var(--mitt-danger);
-}
-
-.mitt-dot.ok {
-  background: var(--mitt-success);
-}
-
-.mitt-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.mitt-content {
-  margin: 0 auto;
-  max-width: 72rem;
-  padding: 0 16px 32px;
-}
-
-/* Personalizar: color rows pair the native picker with its hex field so
-   bar staff can tap a swatch or paste an exact brand hex. */
-.mitt-color-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.mitt-color-label {
-  width: 72px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--mitt-text);
-}
-
-input[type='color'].mitt-swatch {
-  width: 48px;
-  height: 48px;
-  padding: 2px;
-  border-radius: 8px;
-  border: 1px solid var(--mitt-surface-raised);
-  background: var(--mitt-surface-raised);
-  cursor: pointer;
-}
-
-.mitt-field-error {
-  font-size: 12px;
-  color: var(--mitt-danger);
-  font-weight: 600;
-}
-
-/* Preview mini: paints the draft palette inline so saving is never blind. */
-.mitt-preview {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  border: 1px solid var(--mitt-surface-raised);
-  border-radius: 12px;
-  padding: 12px;
-  background: var(--mitt-bg);
-}
-
-.mitt-preview img {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  object-fit: contain;
-  background: rgba(127, 127, 127, 0.15);
-}
-
-.mitt-preview-nologo {
-  font-size: 12px;
-  color: var(--mitt-text-muted);
-}
-
-.mitt-preview strong {
-  color: var(--mitt-text);
-}
-
-.mitt-preview-swatches {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.mitt-preview-swatches span {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  border: 1px solid rgba(127, 127, 127, 0.4);
-}
-
-.mitt-preview-cta {
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--mitt-on-accent);
-  background: var(--mitt-accent);
-}
-
-@media (max-width: 719px) {
-  .mitt-shell {
-    flex-direction: column;
-  }
-
-  .mitt-sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    width: auto;
-    flex: none;
-    height: auto;
-    padding: 10px;
-    border-right: none;
-    border-bottom: 1px solid var(--mitt-surface-raised);
-  }
-
-  .mitt-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding-bottom: 2px;
-  }
-
-  .mitt-navbtn {
-    white-space: nowrap;
-    border-left-width: 1px;
-    border-bottom-width: 3px;
-  }
-
-  .mitt-navbtn[aria-current='page'] {
-    border-left-color: transparent;
-    border-bottom-color: var(--mitt-accent);
-    border-radius: 8px 8px 0 0;
-  }
-
-  .mitt-side-foot {
-    margin-top: 0;
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .mitt-pill {
-    margin-right: auto;
-  }
-}
-
-/* Press feedback: instant tactile confirm on every button (150ms ease-out). */
-.mitt-press {
-  transition: transform 160ms ease-out, filter 160ms ease-out;
-}
-
-.mitt-press:active {
-  transform: scale(0.97);
-}
-
-/* Mesa card entrance: rise from 0.95 + fade, staggered per index via inline
-   animation-delay. Transform/opacity only (GPU), under 300ms for flow. */
-.mitt-enter {
-  opacity: 0;
-  transform: translateY(8px) scale(0.98);
-  animation: mitt-rise 240ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
-}
-
-@keyframes mitt-rise {
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* Manual-connection disclosure: summary reads as a 48px ghost button. */
-.mitt-details > summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mitt-details > summary::-webkit-details-marker {
-  display: none;
-}
-
-/* Toast: same-direction enter, transform/opacity only. */
-.mitt-toast {
-  opacity: 0;
-  transform: translate(-50%, 8px);
-  animation: mitt-toast-in 200ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
-}
-
-@keyframes mitt-toast-in {
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-:focus-visible {
-  outline: 2px solid var(--mitt-accent);
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mitt-enter,
-  .mitt-toast {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-
-  .mitt-toast {
-    transform: translate(-50%, 0);
-  }
-
-  .mitt-press {
-    transition: none;
-  }
-
-  .mitt-press:active {
-    transform: none;
-  }
-
-  .mitt-navbtn {
-    transition: none;
-  }
-
-  .mitt-navbtn:active {
-    transform: none;
-  }
-}
-
-/* Money: mono-numeric tabular figures so columns align (token mono-numeric). */
-.money {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-body {
-  font-family:
-    system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 15px; /* body */
-}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--color-brand); color: var(--color-on-brand); }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn-ghost { background: var(--color-surface); border: 1px solid var(--color-line); }
+.btn-ghost:hover:not(:disabled) { background: var(--color-sunk); }
+.btn-danger { background: color-mix(in srgb, var(--color-berry) 14%, var(--color-surface)); color: var(--color-berry); }
+.btn-danger:hover:not(:disabled) { background: var(--color-berry); color: #fff; }
+.card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 1.25rem; }
+@keyframes pulse-ring { 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--color-brand) 50%,transparent)} 100%{box-shadow:0 0 0 8px transparent} }
+.live { animation: pulse-ring 1.8s infinite; }

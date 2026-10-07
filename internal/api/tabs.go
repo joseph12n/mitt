@@ -215,6 +215,13 @@ func (s *Server) handleTabClose(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "validation_error", err.Error())
 		return
 	}
+	// The sale snapshot is archived before the tab flips to closed: the
+	// sale id mirrors the tab id, so a retry after a partial failure
+	// upserts the same row instead of losing the bill to a 404.
+	if err := s.store.SaveSale(r.Context(), sale); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", "archive sale")
+		return
+	}
 	if err := s.store.SaveTab(r.Context(), tab); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", "close tab")
 		return

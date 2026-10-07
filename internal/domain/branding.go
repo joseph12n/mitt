@@ -32,12 +32,12 @@ var (
 // Branding is the white-label identity painted by every client.
 // Colors are #rrggbb hex; Logo is optional raw file bytes.
 type Branding struct {
-	ShopName               string
-	Primary                string
-	Accent                 string
-	Background             string
-	Logo                   []byte
-	LogoMIME               string
+	ShopName   string
+	Primary    string
+	Accent     string
+	Background string
+	Logo       []byte
+	LogoMIME   string
 }
 
 // DefaultBranding returns the night-bar-first identity from

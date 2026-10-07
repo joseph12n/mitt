@@ -1,855 +1,264 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import QRCode from 'react-qr-code';
+// mitt web shell: Figma master layout wired to the LIVE hub. App owns one
+// refresh that pulls every collection in parallel; views receive slices plus
+// the refresh callback and mutate through the LAN API. Branding authority is
+// GET /api/branding (no local brand keys); localStorage keeps only the
+// pairing token (+base) and the light/dark theme. Spanish UI, English code.
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { LayoutDashboard, Armchair, BookOpen, Receipt, QrCode, Palette, RefreshCw, Truck, Moon, Sun } from 'lucide-react'
 import {
-  api,
+  applyBranding,
   baseUrl,
   checkToken,
-  createTable,
-  deleteTable,
+  DEFAULT_BRANDING,
+  fetchPairing,
+  fetchPublicBranding,
+  fetchToday,
+  listExpenses,
+  listOpenTabs,
+  listProducts,
+  listSales,
+  listSuppliers,
   listTables,
-  money,
-  readPairing,
+  logoUrl,
   storedToken,
+  type BrandingDTO,
   type Expense,
   type Pairing,
   type Product,
+  type Sale,
+  type Supplier,
   type Tab,
   type Table as HubTable,
-} from './api';
-import SpotlightCard from './components/SpotlightCard';
-import CountUp from './components/CountUp';
-import Sidebar, { type SectionId } from './components/Sidebar';
-import Personalizar from './components/Personalizar';
-import {
-  applyBranding,
-  DEFAULT_BRANDING,
-  fetchPublicBranding,
-  logoUrl,
-  type BrandingDTO,
-} from './components/branding';
-import { btnDanger, btnGhost, btnPrimary, cardCls, inputCls, sectionTitle } from './components/ui';
+  type TodaySummary,
+} from './api'
+import Panel from './views/Panel'
+import Mesas from './views/Mesas'
+import Catalogo from './views/Catalogo'
+import Proveedores from './views/Proveedores'
+import Gastos from './views/Gastos'
+import Conexion, { type PillState } from './views/Conexion'
+import Personalizar from './views/Personalizar'
 
-type PillState = 'empty' | 'checking' | 'ok' | 'bad';
-type Theme = 'light' | 'dark';
+const nav = [
+  { id: 'panel', label: 'Panel', icon: LayoutDashboard },
+  { id: 'mesas', label: 'Mesas', icon: Armchair },
+  { id: 'catalogo', label: 'Catálogo', icon: BookOpen },
+  { id: 'proveedores', label: 'Proveedores', icon: Truck },
+  { id: 'gastos', label: 'Gastos', icon: Receipt },
+  { id: 'conexion', label: 'Conexión', icon: QrCode },
+  { id: 'personalizar', label: 'Personalizar', icon: Palette },
+] as const
+type View = (typeof nav)[number]['id']
 
 const pillLabel: Record<PillState, string> = {
   empty: 'SIN TOKEN',
   checking: 'VERIFICANDO…',
   ok: 'CONECTADO',
   bad: 'INVÁLIDO',
-};
+}
+
+// Legacy seed-era keys: the hub owns branding now, so drop them once.
+const LEGACY_BRAND_KEYS = ['mitt:name', 'mitt:accent', 'mitt:accent2', 'mitt:logo']
 
 export default function App() {
-  const [pill, setPill] = useState<PillState>(storedToken() ? 'checking' : 'empty');
-  const [tokenInput, setTokenInput] = useState(storedToken());
-  const [pairing, setPairing] = useState<Pairing | null>(null);
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [catalog, setCatalog] = useState<Product[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [toast, setToast] = useState('');
-  const [tables, setTables] = useState<HubTable[]>([]);
-  const [openTableId, setOpenTableId] = useState('');
-  const [newTableName, setNewTableName] = useState('');
-  const [productName, setProductName] = useState('');
-  const [productPrice, setProductPrice] = useState('');
-  const [expenseDesc, setExpenseDesc] = useState('');
-  const [expenseQty, setExpenseQty] = useState('');
-  const [expenseCost, setExpenseCost] = useState('');
-  const [addSelection, setAddSelection] = useState<Record<string, { productId: string; qty: string }>>({});
-  const toastTimer = useRef<number | null>(null);
-
-  // Sidebar shell + runtime identity state.
-  const [section, setSection] = useState<SectionId>('panel');
-  const [theme, setTheme] = useState<Theme>(() =>
-    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light'
-      ? 'light'
-      : 'dark',
-  );
-  const [branding, setBranding] = useState<BrandingDTO>(DEFAULT_BRANDING);
-  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  const [view, setView] = useState<View>('panel')
+  const [products, setProducts] = useState<Product[]>([])
+  const [tables, setTables] = useState<HubTable[]>([])
+  const [tabs, setTabs] = useState<Tab[]>([])
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [sales, setSales] = useState<Sale[]>([])
+  const [today, setToday] = useState<TodaySummary | null>(null)
+  const [pairing, setPairing] = useState<Pairing | null>(null)
+  const [branding, setBranding] = useState<BrandingDTO>(DEFAULT_BRANDING)
+  const [logoSrc, setLogoSrc] = useState<string | null>(null)
+  const [pill, setPill] = useState<PillState>(storedToken() ? 'checking' : 'empty')
+  const [toast, setToast] = useState('')
+  // Master defaults light; the toggle persists as today under mitt_theme.
+  const [dark, setDarkState] = useState(false)
+  const toastTimer = useRef<number | null>(null)
 
   const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(''), 4000);
-  }, []);
+    setToast(msg)
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(''), 4000)
+  }, [])
 
   const fail = useCallback(
     (err: unknown) => {
-      showToast(err instanceof Error ? err.message : 'Ocurrió un error. Intente de nuevo.');
+      showToast(err instanceof Error ? err.message : 'Ocurrió un error. Intente de nuevo.')
     },
     [showToast],
-  );
+  )
+
+  const setDark = useCallback((d: boolean) => {
+    setDarkState(d)
+    try {
+      localStorage.setItem('mitt_theme', d ? 'dark' : 'light')
+    } catch {
+      // Private mode: the session keeps the default, nothing breaks.
+    }
+    document.documentElement.classList.toggle('dark', d)
+  }, [])
 
   const paintPill = useCallback(async () => {
-    const token = storedToken();
+    const token = storedToken()
     if (!token) {
-      setPill('empty');
-      return;
+      setPill('empty')
+      return
     }
-    setPill('checking');
-    const probed = token;
-    const ok = await checkToken();
-    if (storedToken() !== probed) return; // user saved a new token while probing
-    setPill(ok ? 'ok' : 'bad');
-  }, []);
+    setPill('checking')
+    const probed = token
+    const ok = await checkToken()
+    if (storedToken() !== probed) return // user saved a new token while probing
+    setPill(ok ? 'ok' : 'bad')
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!storedToken()) {
-      setPill('empty');
-      return;
+      setPill('empty')
+      return
     }
-    paintPill();
+    paintPill()
     try {
-      const [tabsRes, prodsRes, expsRes, tablesRes, pairRes] = await Promise.all([
-        api<{ tabs: Tab[] }>('GET', '/api/tabs/open'),
-        api<{ products: Product[] }>('GET', '/api/products'),
-        api<{ expenses: Expense[] }>('GET', '/api/expenses'),
+      const [tabsRes, prodsRes, expsRes, tablesRes, supsRes, salesRes, todayRes, pairRes] = await Promise.all([
+        listOpenTabs(),
+        listProducts(),
+        listExpenses(),
         listTables(),
-        api<Pairing>('GET', '/api/pairing').catch(() => null),
-      ]);
-      setTabs(tabsRes.tabs || []);
-      setCatalog(prodsRes.products || []);
-      setExpenses(expsRes.expenses || []);
-      setTables(tablesRes);
-      setPairing(pairRes);
+        listSuppliers(),
+        listSales(),
+        fetchToday(),
+        fetchPairing().catch(() => null),
+      ])
+      setTabs(tabsRes)
+      setProducts(prodsRes)
+      setExpenses(expsRes)
+      setTables(tablesRes)
+      setSuppliers(supsRes)
+      setSales(salesRes)
+      setToday(todayRes)
+      setPairing(pairRes)
     } catch (err) {
-      fail(err);
+      fail(err)
     }
-  }, [paintPill, fail]);
+  }, [paintPill, fail])
 
+  // Theme + legacy cleanup + public identity paint (login-less, offline-safe).
   useEffect(() => {
-    paintPill();
-    if (storedToken()) refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Public identity paints over the theme tokens; a failed fetch keeps the
-  // built-in dark defaults working (offline-safe).
-  useEffect(() => {
-    let live = true;
+    let stored: string | null = null
+    try {
+      stored = localStorage.getItem('mitt_theme')
+      LEGACY_BRAND_KEYS.forEach((k) => localStorage.removeItem(k))
+    } catch {
+      // Private mode: defaults still paint.
+    }
+    const isDark = stored === 'dark'
+    setDarkState(isDark)
+    document.documentElement.classList.toggle('dark', isDark)
+    let live = true
     fetchPublicBranding(baseUrl()).then((b) => {
-      if (!live || !b) return;
-      setBranding(b);
-      applyBranding(b);
-      setLogoSrc(b.has_logo ? logoUrl(baseUrl(), b.updated_at) : null);
-    });
+      if (!live || !b) return
+      setBranding(b)
+      applyBranding(b)
+      setLogoSrc(b.has_logo ? logoUrl(baseUrl(), b.updated_at) : null)
+    })
     return () => {
-      live = false;
-    };
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    setTheme((t) => {
-      const next: Theme = t === 'dark' ? 'light' : 'dark';
-      try {
-        localStorage.setItem('mitt_theme', next);
-      } catch {
-        // Private mode: the session keeps the default, nothing breaks.
-      }
-      document.documentElement.dataset.theme = next;
-      return next;
-    });
-  }, []);
-
-  const handleBrandingSaved = useCallback((next: BrandingDTO) => {
-    setBranding(next);
-    applyBranding(next);
-    setLogoSrc(next.has_logo ? logoUrl(baseUrl(), next.updated_at) : null);
-  }, []);
-
-  const saveToken = () => {
-    const parsed = readPairing(tokenInput);
-    const token = (parsed.token || '').trim();
-    if (parsed.base) localStorage.setItem('mitt_base', parsed.base);
-    localStorage.setItem('mitt_token', token);
-    setTokenInput(token || tokenInput);
-    paintPill();
-    if (token) refresh();
-    else showToast('Guarde un token para conectar.');
-  };
-
-  // Hub ids are opaque: resolve the human label for display, falling back
-  // to the raw id for tabs opened before the hub owned the names.
-  const labelOf = useCallback(
-    (tableId: string) => tables.find((t) => t.id === tableId)?.label ?? tableId,
-    [tables],
-  );
-
-  const openTable = async () => {
-    if (!openTableId) {
-      showToast('Elija una mesa libre.');
-      return;
+      live = false
     }
-    try {
-      await api('POST', '/api/tabs', { table_id: openTableId });
-      setOpenTableId('');
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
+  }, [])
 
-  const addTable = async () => {
-    const label = newTableName.trim();
-    if (!label) {
-      showToast('Escriba el nombre de la mesa.');
-      return;
-    }
-    try {
-      await createTable(label);
-      setNewTableName('');
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  const removeTable = async (t: HubTable) => {
-    if (t.occupied) {
-      showToast('LA MESA TIENE CUENTA ABIERTA.');
-      return;
-    }
-    if (!confirm(`Eliminar mesa ${t.label}?`)) return;
-    try {
-      await deleteTable(t.id);
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  // One-tap adoption for tabs opened before the 422 rule: register the
-  // legacy name in the hub so future bills open against a hub-owned row.
-  const registerTable = async (label: string) => {
-    try {
-      await createTable(label);
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  const addItem = async (tab: Tab) => {
-    const sel = addSelection[tab.id] || { productId: '', qty: '1' };
-    const qty = parseInt(sel.qty, 10);
-    if (!sel.productId || !(qty > 0)) {
-      showToast('Elija un producto y una cantidad válida.');
-      return;
-    }
-    try {
-      await api('POST', `/api/tabs/${encodeURIComponent(tab.id)}/items`, {
-        product_id: sel.productId,
-        qty,
-      });
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  const closeTab = async (tab: Tab) => {
-    if (!confirm(`Cerrar mesa ${labelOf(tab.table_id)} por ${money(tab.total_cents)}?`)) return;
-    try {
-      const sale = await api<{ table_id: string; total_cents: number }>(
-        'POST',
-        `/api/tabs/${encodeURIComponent(tab.id)}/close`,
-      );
-      showToast(`Mesa ${labelOf(sale.table_id)} cobrada: ${money(sale.total_cents)}.`);
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  const toggleProduct = async (p: Product) => {
-    try {
-      await api('PATCH', `/api/products/${encodeURIComponent(p.id)}`, { available: !p.available });
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  const addProduct = async () => {
-    const name = productName.trim();
-    const cents = Math.round(parseFloat(productPrice) * 100);
-    if (!name || !(cents >= 0)) {
-      showToast('Escriba nombre y precio válido.');
-      return;
-    }
-    try {
-      await api('POST', '/api/products', { name, price_cents: cents });
-      setProductName('');
-      setProductPrice('');
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  const addExpense = async () => {
-    const desc = expenseDesc.trim();
-    const qty = parseFloat(expenseQty);
-    const cents = Math.round(parseFloat(expenseCost) * 100);
-    if (!desc || !(qty > 0) || !(cents >= 0)) {
-      showToast('Complete descripción, cantidad y costo.');
-      return;
-    }
-    try {
-      await api('POST', '/api/expenses', { description: desc, qty, cost_cents: cents });
-      setExpenseDesc('');
-      setExpenseQty('');
-      setExpenseCost('');
-      refresh();
-    } catch (err) {
-      fail(err);
-    }
-  };
-
-  // KPI strip reads only already-fetched state: no extra requests.
-  const openCount = tabs.length;
-  const freeTables = tables.filter((t) => !t.occupied);
-  // Tabs opened before the hub owned the names carry the legacy free-text
-  // id; anything outside hub ids AND labels is unregistered.
-  const knownTableKeys = new Set<string>();
-  tables.forEach((t) => {
-    knownTableKeys.add(t.id);
-    knownTableKeys.add(t.label);
-  });
-
-  // Drop a stale ABRIR selection once its table leaves the free list.
   useEffect(() => {
-    if (openTableId && !freeTables.some((t) => t.id === openTableId)) setOpenTableId('');
-  }, [tables, openTableId, freeTables]);
-  const inProgressCents = tabs.reduce((sum, t) => sum + t.total_cents, 0);
-  const availableCount = catalog.filter((p) => p.available).length;
+    paintPill()
+    if (storedToken()) refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleBrandingSaved = useCallback(
+    (next: BrandingDTO) => {
+      setBranding(next)
+      applyBranding(next)
+      setLogoSrc(next.has_logo ? logoUrl(baseUrl(), next.updated_at) : null)
+    },
+    [],
+  )
+
+  // Token saved from Conexión: re-verify, reload identity + collections.
+  const handleConnected = useCallback(() => {
+    paintPill()
+    refresh()
+    fetchPublicBranding(baseUrl()).then((b) => {
+      if (!b) return
+      setBranding(b)
+      applyBranding(b)
+      setLogoSrc(b.has_logo ? logoUrl(baseUrl(), b.updated_at) : null)
+    })
+  }, [paintPill, refresh])
+
+  const openCount = tabs.length
+  const name = branding.shop_name.trim() || 'mitt'
 
   return (
-    <div className="mitt-shell min-h-screen">
-      <div className="mitt-ambient" aria-hidden="true" />
-      <Sidebar
-        branding={branding}
-        logoSrc={logoSrc}
-        onLogoError={() => setLogoSrc(null)}
-        section={section}
-        onSelect={setSection}
-        pillText={pillLabel[pill]}
-        pillOk={pill === 'ok'}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onRefresh={refresh}
-      />
-
-      <main className="mitt-main">
-        <div className="mitt-content">
-          {section === 'panel' && (
-            <section aria-label="Panel">
-              <div className="mb-2 mt-2 flex flex-wrap items-end justify-between gap-2">
-                <h2 className={sectionTitle}>Panel</h2>
-                <p className="money text-xs text-mitt-muted">
-                  {openCount === 0
-                    ? 'Sin mesas abiertas'
-                    : `${openCount} abierta${openCount === 1 ? '' : 's'} · ${money(inProgressCents)} en curso`}
-                </p>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div className={cardCls}>
-                  <p className="text-xs text-mitt-muted">Mesas abiertas</p>
-                  <p className="money text-[32px] font-bold text-mitt-text">
-                    <CountUp value={openCount} format={(n) => String(n)} durationMs={400} />
-                  </p>
-                </div>
-                <div className={cardCls}>
-                  <p className="text-xs text-mitt-muted">En curso</p>
-                  <p className="money text-[32px] font-bold text-mitt-text">
-                    <CountUp value={inProgressCents} format={money} />
-                  </p>
-                </div>
-                <div className={cardCls}>
-                  <p className="text-xs text-mitt-muted">Productos disponibles</p>
-                  <p className="money text-[32px] font-bold text-mitt-text">
-                    <CountUp
-                      value={availableCount}
-                      format={(n) => `${n} de ${catalog.length}`}
-                      durationMs={400}
-                    />
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div className={cardCls}>
-                  <h3 className="mb-2 font-semibold text-mitt-text">Emparejar móvil</h3>
-                  {pairing ? (
-                    <div className="flex items-center gap-4">
-                      <div className="rounded-xl bg-white p-3">
-                        <QRCode value={pairing.pairing_code} size={168} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-mitt-text">Escanee para emparejar</p>
-                        <p className="money mt-1 max-w-55 text-xs break-all text-mitt-muted">
-                          {pairing.url}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-mitt-muted">
-                      Conecte con un token para ver el código QR de emparejamiento.
-                    </p>
-                  )}
-                </div>
-
-                <div className={cardCls}>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="font-semibold text-mitt-text">Mesas abiertas</h3>
-                    <span className="money text-xs text-mitt-muted">
-                      {openCount === 0 ? 'Barra libre' : money(inProgressCents)}
-                    </span>
-                  </div>
-                  {tabs.length === 0 ? (
-                    <p className="text-sm text-mitt-muted">
-                      La barra está libre. Abra la primera mesa desde Mesas.
-                    </p>
-                  ) : (
-                    <ul className="list-none p-0">
-                      {tabs.map((t) => (
-                        <li
-                          key={t.id}
-                          className="money flex items-baseline justify-between gap-2 border-b border-mitt-raised py-1 text-mitt-text"
-                        >
-                          <span>
-                            Mesa {labelOf(t.table_id)}{' '}
-                            <span className="text-xs text-mitt-muted">
-                              · {(t.items || []).length} consumo{(t.items || []).length === 1 ? '' : 's'}
-                            </span>
-                          </span>
-                          <span className="font-bold">{money(t.total_cents)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <button
-                    type="button"
-                    className={`${btnGhost} mt-3`}
-                    onClick={() => setSection('mesas')}
-                  >
-                    IR A MESAS
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {section === 'mesas' && (
-            <section aria-label="Mesas">
-              <div className="mb-2 mt-2 flex flex-wrap items-end justify-between gap-2">
-                <h2 className={sectionTitle}>Mesas</h2>
-                <p className="money text-xs text-mitt-muted">
-                  {openCount === 0 ? 'Sin mesas abiertas' : `${openCount} abierta${openCount === 1 ? '' : 's'} · ${money(inProgressCents)} en curso`}
-                </p>
-              </div>
-              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-mitt-surface p-3">
-                <select
-                  className={inputCls}
-                  value={openTableId}
-                  aria-label="Mesa libre para abrir"
-                  onChange={(e) => setOpenTableId(e.target.value)}
-                >
-                  <option value="">Mesa libre…</option>
-                  {freeTables.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  onClick={openTable}
-                  disabled={freeTables.length === 0}
-                >
-                  ABRIR MESA
-                </button>
-                {tables.length === 0 ? (
-                  <span className="text-xs text-mitt-muted">
-                    Registre la primera mesa abajo para empezar.
-                  </span>
-                ) : (
-                  freeTables.length === 0 && (
-                    <span className="text-xs text-mitt-muted">
-                      Sin mesas libres. Cierre una cuenta para liberar.
-                    </span>
-                  )
-                )}
-              </div>
-              <div className="mb-2 rounded-xl bg-mitt-surface p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    className={inputCls}
-                    type="text"
-                    placeholder="Nombre"
-                    size={12}
-                    value={newTableName}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck={false}
-                    aria-label="Nombre de la mesa nueva"
-                    onChange={(e) => setNewTableName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') addTable();
-                    }}
-                  />
-                  <button type="button" className={btnPrimary} onClick={addTable}>
-                    AGREGAR MESA
-                  </button>
-                </div>
-                {tables.length === 0 ? (
-                  <p className="mt-2 text-sm text-mitt-muted">Sin mesas registradas.</p>
-                ) : (
-                  <ul className="mt-2 list-none p-0">
-                    {tables.map((t) => (
-                      <li
-                        key={t.id}
-                        className="money flex flex-wrap items-center justify-between gap-2 border-b border-mitt-raised py-1 text-mitt-text"
-                      >
-                        <span className="flex items-center gap-2">
-                          <span className={`mitt-dot${t.occupied ? '' : ' ok'}`} aria-hidden="true" />
-                          <strong>{t.label}</strong>
-                          <span className="text-xs text-mitt-muted">
-                            {t.occupied ? 'Ocupada' : 'Libre'}
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-2">
-                          {t.occupied && (
-                            <span className="text-xs text-mitt-muted">Con cuenta abierta</span>
-                          )}
-                          <button
-                            type="button"
-                            className={btnGhost}
-                            disabled={t.occupied}
-                            title={
-                              t.occupied ? 'La mesa tiene cuenta abierta' : `Eliminar mesa ${t.label}`
-                            }
-                            onClick={() => removeTable(t)}
-                          >
-                            ELIMINAR
-                          </button>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              {tabs.length === 0 ? (
-                <div className={`${cardCls} text-center`}>
-                  <p className="font-semibold text-mitt-text">La barra está libre</p>
-                  <p className="mt-1 text-sm text-mitt-muted">
-                    Elija una mesa libre arriba para empezar a vender.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {tabs.map((t, i) => {
-                    const sel = addSelection[t.id] || { productId: '', qty: '1' };
-                    const registered = knownTableKeys.has(t.table_id);
-                    return (
-                      <SpotlightCard
-                        key={t.id}
-                        className="border-l-4 border-l-mitt-accent bg-mitt-raised p-3"
-                      >
-                        <div
-                          className="mitt-enter relative"
-                          style={{ animationDelay: `${Math.min(i * 50, 250)}ms` }}
-                        >
-                          <strong className="text-mitt-text">Mesa {labelOf(t.table_id)}</strong>{' '}
-                          <span className="text-xs text-mitt-muted">
-                            Ocupada · <span className="money">{money(t.total_cents)}</span>
-                          </span>
-                          {!registered && (
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span className="text-xs text-mitt-muted">
-                                Mesa sin registrar en el hub.
-                              </span>
-                              <button
-                                type="button"
-                                className={btnGhost}
-                                onClick={() => registerTable(t.table_id)}
-                              >
-                                REGISTRAR MESA
-                              </button>
-                            </div>
-                          )}
-                          <ul className="my-2 list-none p-0">
-                            {(t.items || []).length === 0 && (
-                              <li className="text-xs text-mitt-muted">Sin consumos.</li>
-                            )}
-                            {(t.items || []).map((it) => (
-                              <li
-                                key={it.product_id}
-                                className="border-b border-mitt-raised py-1 text-mitt-text"
-                              >
-                                <span className="money">
-                                  {it.qty} × {it.name}
-                                </span>{' '}
-                                · <span className="money">{money(it.line_total_cents)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="money text-[32px] font-bold text-mitt-text">
-                            {money(t.total_cents)}
-                          </div>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <select
-                              className={inputCls}
-                              value={sel.productId}
-                              aria-label={`Producto para mesa ${labelOf(t.table_id)}`}
-                              onChange={(e) =>
-                                setAddSelection((s) => ({
-                                  ...s,
-                                  [t.id]: { productId: e.target.value, qty: sel.qty },
-                                }))
-                              }
-                            >
-                              <option value="">Producto…</option>
-                              {catalog.map((p) => (
-                                <option key={p.id} value={p.id} disabled={!p.available}>
-                                  {p.name} · {money(p.price_cents)}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              className={`${inputCls} w-20`}
-                              type="number"
-                              aria-label={`Cantidad para mesa ${labelOf(t.table_id)}`}
-                              value={sel.qty}
-                              min={1}
-                              step={1}
-                              onChange={(e) =>
-                                setAddSelection((s) => ({
-                                  ...s,
-                                  [t.id]: { productId: sel.productId, qty: e.target.value },
-                                }))
-                              }
-                            />
-                            <button type="button" className={btnPrimary} onClick={() => addItem(t)}>
-                              AGREGAR
-                            </button>
-                            <button type="button" className={btnDanger} onClick={() => closeTab(t)}>
-                              CERRAR
-                            </button>
-                          </div>
-                        </div>
-                      </SpotlightCard>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          )}
-
-          {section === 'catalogo' && (
-            <section aria-label="Catálogo">
-              <h2 className={`${sectionTitle} mb-2 mt-2`}>Catálogo</h2>
-              {catalog.length === 0 ? (
-                <div className={`${cardCls} text-center`}>
-                  <p className="font-semibold text-mitt-text">Catálogo vacío</p>
-                  <p className="mt-1 text-sm text-mitt-muted">
-                    Agregue el primer producto con el formulario de abajo.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {catalog.map((p) => (
-                    <SpotlightCard key={p.id} className="p-3">
-                      <div className="relative flex flex-wrap items-center gap-2">
-                        <strong className="text-mitt-text">{p.name}</strong>{' '}
-                        <span className="money text-mitt-text">{money(p.price_cents)}</span>{' '}
-                        {p.available ? (
-                          <span className="rounded bg-mitt-success px-2 py-0.5 text-xs font-semibold text-mitt-bg">
-                            DISPONIBLE
-                          </span>
-                        ) : (
-                          <span className="rounded bg-mitt-danger px-2 py-0.5 text-xs font-semibold text-mitt-text">
-                            SIN STOCK
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          className={`${btnGhost} ml-auto`}
-                          onClick={() => toggleProduct(p)}
-                        >
-                          {p.available ? 'MARCAR SIN STOCK' : 'MARCAR DISPONIBLE'}
-                        </button>
-                      </div>
-                    </SpotlightCard>
-                  ))}
-                </div>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-mitt-surface p-3">
-                <input
-                  className={inputCls}
-                  type="text"
-                  placeholder="Nombre"
-                  size={16}
-                  value={productName}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  onChange={(e) => setProductName(e.target.value)}
-                />
-                <input
-                  className={inputCls}
-                  type="number"
-                  placeholder="Precio"
-                  min={0}
-                  step="0.01"
-                  size={8}
-                  value={productPrice}
-                  onChange={(e) => setProductPrice(e.target.value)}
-                />
-                <button type="button" className={btnPrimary} onClick={addProduct}>
-                  AGREGAR
-                </button>
-              </div>
-            </section>
-          )}
-
-          {section === 'gastos' && (
-            <section aria-label="Gastos">
-              <h2 className={`${sectionTitle} mb-2 mt-2`}>Gastos</h2>
-              {expenses.length === 0 ? (
-                <div className={`${cardCls} text-center`}>
-                  <p className="font-semibold text-mitt-text">Sin gastos</p>
-                  <p className="mt-1 text-sm text-mitt-muted">
-                    Registre el primer gasto del día con el formulario de abajo.
-                  </p>
-                </div>
-              ) : (
-                <SpotlightCard className="p-3">
-                  <ul className="relative my-2 list-none p-0">
-                    {expenses.map((e) => (
-                      <li
-                        key={e.id}
-                        className="border-b border-mitt-raised py-1 text-mitt-text"
-                      >
-                        {e.description} · {e.qty} u ·{' '}
-                        <span className="money">{money(e.cost_cents)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </SpotlightCard>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-mitt-surface p-3">
-                <input
-                  className={inputCls}
-                  type="text"
-                  placeholder="Descripción"
-                  size={16}
-                  value={expenseDesc}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  onChange={(e) => setExpenseDesc(e.target.value)}
-                />
-                <input
-                  className={inputCls}
-                  type="number"
-                  placeholder="Cantidad"
-                  min={0}
-                  step="any"
-                  size={8}
-                  value={expenseQty}
-                  onChange={(e) => setExpenseQty(e.target.value)}
-                />
-                <input
-                  className={inputCls}
-                  type="number"
-                  placeholder="Costo"
-                  min={0}
-                  step="0.01"
-                  size={8}
-                  value={expenseCost}
-                  onChange={(e) => setExpenseCost(e.target.value)}
-                />
-                <button type="button" className={btnPrimary} onClick={addExpense}>
-                  AGREGAR
-                </button>
-              </div>
-            </section>
-          )}
-
-          {section === 'conexion' && (
-            <section aria-label="Conexión">
-              <div className="mb-2 mt-2 flex flex-wrap items-end justify-between gap-2">
-                <h2 className={sectionTitle}>Conexión</h2>
-                <span
-                  className={`rounded px-3 py-1 text-xs font-semibold ${
-                    pill === 'ok' ? 'bg-mitt-success text-mitt-bg' : 'bg-mitt-danger text-mitt-text'
-                  }`}
-                >
-                  {pillLabel[pill]}
-                </span>
-              </div>
-              <div className={`${cardCls} flex flex-col gap-4`}>
-                <details className="mitt-details w-full sm:max-w-md">
-                  <summary className={btnGhost}>Conexión manual</summary>
-                  <div className="mt-2 flex flex-col gap-2">
-                    <label className="text-xs text-mitt-muted" htmlFor="token-input">
-                      Token o enlace de emparejamiento
-                    </label>
-                    <input
-                      id="token-input"
-                      className={`${inputCls} w-full`}
-                      type="text"
-                      inputMode="text"
-                      enterKeyHint="go"
-                      placeholder="Token o enlace mitt://pair?…"
-                      value={tokenInput}
-                      autoComplete="off"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      spellCheck={false}
-                      onChange={(e) => setTokenInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveToken();
-                      }}
-                    />
-                    <button type="button" className={btnPrimary} onClick={saveToken}>
-                      GUARDAR
-                    </button>
-                    <p className="text-xs text-mitt-muted">
-                      El token se guarda en este navegador. Base:{' '}
-                      <span className="money">{baseUrl()}</span>
-                    </p>
-                  </div>
-                </details>
-              </div>
-            </section>
-          )}
-
-          {section === 'personalizar' && (
-            <Personalizar
-              branding={branding}
-              logoSrc={logoSrc}
-              hasToken={storedToken() !== ''}
-              onSaved={handleBrandingSaved}
-              notify={showToast}
-              fail={fail}
-            />
-          )}
+    <div className="min-h-screen lg:flex">
+      <aside className="lg:sticky lg:top-0 lg:h-screen lg:w-64 shrink-0 flex lg:flex-col gap-2 p-3 lg:p-5 border-b lg:border-b-0 lg:border-r border-line bg-paper overflow-x-auto">
+        <div className="hidden lg:flex items-center gap-3 mb-8 px-2">
+          <div className="size-10 rounded-xl bg-brand text-on-brand grid place-items-center font-display font-extrabold text-lg overflow-hidden shrink-0">
+            {logoSrc ? <img src={logoSrc} alt={`Logo de ${name}`} className="size-full object-cover" onError={() => setLogoSrc(null)} /> : name.slice(0, 1).toUpperCase()}
+          </div>
+          <div>
+            <div className="font-display font-bold text-lg leading-none">{name}</div>
+            <div className="text-xs text-mute mt-1">Servidor local</div>
+          </div>
         </div>
+        <nav className="flex lg:flex-col gap-1 flex-1" aria-label="Secciones">
+          {nav.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setView(id)}
+              className={`flex items-center gap-3 px-3 h-11 rounded-xl text-sm font-semibold transition whitespace-nowrap ${view === id ? 'bg-ink text-paper' : 'text-mute hover:bg-sunk hover:text-ink'}`}>
+              <Icon size={18} />{label}
+              {id === 'mesas' && openCount > 0 && (
+                <span className={`ml-auto num text-xs rounded-full px-2 py-0.5 ${view === id ? 'bg-paper/20' : 'bg-brand-soft text-brand'}`}>{openCount}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="hidden lg:block space-y-3">
+          <div className="flex items-center gap-2 px-2 text-xs font-bold tracking-wide text-brand" role="status">
+            <span className={`size-2 rounded-full ${pill === 'ok' ? 'bg-brand live' : 'bg-berry'}`} />{pillLabel[pill]}
+          </div>
+          <button className="btn btn-ghost w-full" onClick={refresh}><RefreshCw size={16} />Refrescar</button>
+          <button className="btn btn-ghost w-full" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? 'Modo claro' : 'Modo oscuro'}</button>
+        </div>
+      </aside>
+      <main className="flex-1 min-w-0 p-5 lg:p-10 max-w-[1400px]">
+        {view === 'panel' && (
+          <Panel d={{ products, tables, tabs, sales, today, expenses, suppliers, name }} go={(v) => setView(v as View)} />
+        )}
+        {view === 'mesas' && <Mesas tables={tables} tabs={tabs} products={products} refresh={refresh} notify={showToast} fail={fail} />}
+        {view === 'catalogo' && <Catalogo products={products} refresh={refresh} notify={showToast} fail={fail} />}
+        {view === 'proveedores' && <Proveedores suppliers={suppliers} refresh={refresh} notify={showToast} fail={fail} />}
+        {view === 'gastos' && <Gastos expenses={expenses} refresh={refresh} notify={showToast} fail={fail} />}
+        {view === 'conexion' && (
+          <Conexion pairing={pairing} tables={tables} products={products} pill={pill} onConnected={handleConnected} />
+        )}
+        {view === 'personalizar' && (
+          <Personalizar
+            branding={branding}
+            logoSrc={logoSrc}
+            hasToken={storedToken() !== ''}
+            dark={dark}
+            setDark={setDark}
+            onSaved={handleBrandingSaved}
+            notify={showToast}
+            fail={fail}
+          />
+        )}
       </main>
 
       {toast && (
-        <div
-          role="alert"
-          className="mitt-toast fixed bottom-4 left-1/2 max-w-[90vw] -translate-x-1/2 rounded-lg bg-mitt-danger px-5 py-3 text-mitt-text"
-        >
+        <div role="alert" className="fixed bottom-4 left-1/2 max-w-[90vw] -translate-x-1/2 rounded-xl bg-ink text-paper px-5 py-3 text-sm font-semibold">
           {toast}
         </div>
       )}
     </div>
-  );
+  )
 }

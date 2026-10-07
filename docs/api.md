@@ -24,6 +24,12 @@ Money is in integer cents; expense `qty` may be fractional.
 | POST | /api/tabs/{id}/close | yes | — | 200 sale `{id, table_id, items, total_cents, closed_at}`, 404 unknown tab, 422 empty tab |
 | GET | /api/expenses | yes | — | 200 `{expenses}` oldest first |
 | POST | /api/expenses | yes | `{description, qty>0, cost_cents>=0}` | 201 expense, 400 bad JSON, 422 domain error |
+| GET | /api/suppliers | yes | — | 200 `{suppliers}` ordered by name |
+| POST | /api/suppliers | yes | `{name 1..80 chars trimmed, phone? ≤40 chars, note? ≤200 chars}` | 201 supplier, 400 bad JSON, 422 domain error |
+| PATCH | /api/suppliers/{id} | yes | `{name?, phone?, note?}` merged onto stored | 200 supplier, 404 unknown id, 422 domain error |
+| DELETE | /api/suppliers/{id} | yes | — | 204, 404 unknown id |
+| GET | /api/sales | yes | —, `?limit=` optional (default 50, capped at 500) | 200 `{sales}` newest first, same `{id, table_id, items, total_cents, closed_at}` shape as closing a tab, 400 bad limit |
+| GET | /api/sales/today | yes | — | 200 `{date YYYY-MM-DD, count, total_cents}` |
 | GET | /api/pairing | yes | — | 200 `{url, pairing_code}`, 503 no LAN address |
 | GET | /api/branding | no | — | 200 `{shop_name, primary, accent, background, has_logo, updated_at}` |
 | GET | /api/branding/logo | no | — | 200 raw logo bytes (`Content-Type` = stored mime, immutable + ETag), 404 no logo |

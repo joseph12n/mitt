@@ -51,6 +51,7 @@ func TestOpenMigrateIdempotent(t *testing.T) {
 		{"tab items", "tab_items"},
 		{"sales", "sales"},
 		{"sale items", "sale_items"},
+		{"suppliers", "suppliers"},
 		{"expenses", "expenses"},
 		{"branding", "branding"},
 	}
