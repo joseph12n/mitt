@@ -15,7 +15,10 @@ Money is in integer cents; expense `qty` may be fractional.
 | GET | /api/products | yes | —, `?available=true\|false` optional | 200 `{products}`, 400 bad filter |
 | POST | /api/products | yes | `{name, price_cents>=0, available?}` (available defaults true) | 201 product, 400 bad JSON, 422 domain error |
 | PATCH | /api/products/{id} | yes | `{name?, price_cents?, available?}` | 200 product, 404 unknown id, 422 domain error |
-| POST | /api/tabs | yes | `{table_id}` non-empty; idempotent per open table | 201 tab (200 when already open), 422 empty label |
+| POST | /api/tabs | yes | `{table_id}` must reference a table created first via `POST /api/tables`; idempotent per open table | 201 tab (200 when already open), 422 empty label or unknown_table |
+| GET | /api/tables | yes | — | 200 `{tables:[{id, label, occupied}]}` with occupied derived from open tabs |
+| POST | /api/tables | yes | `{label}` trimmed, 1..40 chars | 201 table, 400 bad JSON, 422 domain error |
+| DELETE | /api/tables/{id} | yes | — | 204, 404 unknown id, 409 table_occupied while an open tab exists |
 | GET | /api/tabs/open | yes | — | 200 `{tabs}` oldest first |
 | POST | /api/tabs/{id}/items | yes | `{product_id, qty>0}`; price snapshotted, same-product lines merged | 200 tab, 404 unknown tab/product, 422 unavailable or invalid qty |
 | POST | /api/tabs/{id}/close | yes | — | 200 sale `{id, table_id, items, total_cents, closed_at}`, 404 unknown tab, 422 empty tab |
@@ -28,6 +31,10 @@ Money is in integer cents; expense `qty` may be fractional.
 
 Notes:
 
+- The hub owns the tables: `POST /api/tabs` with an unknown `table_id`
+  returns `422 unknown_table`. Clients must create the table first via
+  `POST /api/tables`; previously any non-empty string was accepted. Table
+  `occupied` is derived from open tabs at read time, never stored.
 - Closing an already-closed tab returns 404 (only open tabs are addressable).
 - `422` always carries the domain validation message for debugging.
 - Unknown paths return JSON `404`; wrong-method use returns the stdlib `405`.

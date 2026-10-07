@@ -4,6 +4,9 @@ import {
   api,
   baseUrl,
   checkToken,
+  createTable,
+  deleteTable,
+  listTables,
   money,
   readPairing,
   storedToken,
@@ -11,6 +14,7 @@ import {
   type Pairing,
   type Product,
   type Tab,
+  type Table as HubTable,
 } from './api';
 import SpotlightCard from './components/SpotlightCard';
 import CountUp from './components/CountUp';
@@ -43,7 +47,9 @@ export default function App() {
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [toast, setToast] = useState('');
-  const [tableName, setTableName] = useState('');
+  const [tables, setTables] = useState<HubTable[]>([]);
+  const [openTableId, setOpenTableId] = useState('');
+  const [newTableName, setNewTableName] = useState('');
   const [productName, setProductName] = useState('');
   const [productPrice, setProductPrice] = useState('');
   const [expenseDesc, setExpenseDesc] = useState('');
@@ -95,15 +101,17 @@ export default function App() {
     }
     paintPill();
     try {
-      const [tabsRes, prodsRes, expsRes, pairRes] = await Promise.all([
+      const [tabsRes, prodsRes, expsRes, tablesRes, pairRes] = await Promise.all([
         api<{ tabs: Tab[] }>('GET', '/api/tabs/open'),
         api<{ products: Product[] }>('GET', '/api/products'),
         api<{ expenses: Expense[] }>('GET', '/api/expenses'),
+        listTables(),
         api<Pairing>('GET', '/api/pairing').catch(() => null),
       ]);
       setTabs(tabsRes.tabs || []);
       setCatalog(prodsRes.products || []);
       setExpenses(expsRes.expenses || []);
+      setTables(tablesRes);
       setPairing(pairRes);
     } catch (err) {
       fail(err);
@@ -161,15 +169,61 @@ export default function App() {
     else showToast('Guarde un token para conectar.');
   };
 
+  // Hub ids are opaque: resolve the human label for display, falling back
+  // to the raw id for tabs opened before the hub owned the names.
+  const labelOf = useCallback(
+    (tableId: string) => tables.find((t) => t.id === tableId)?.label ?? tableId,
+    [tables],
+  );
+
   const openTable = async () => {
-    const label = tableName.trim();
+    if (!openTableId) {
+      showToast('Elija una mesa libre.');
+      return;
+    }
+    try {
+      await api('POST', '/api/tabs', { table_id: openTableId });
+      setOpenTableId('');
+      refresh();
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  const addTable = async () => {
+    const label = newTableName.trim();
     if (!label) {
       showToast('Escriba el nombre de la mesa.');
       return;
     }
     try {
-      await api('POST', '/api/tabs', { table_id: label });
-      setTableName('');
+      await createTable(label);
+      setNewTableName('');
+      refresh();
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  const removeTable = async (t: HubTable) => {
+    if (t.occupied) {
+      showToast('LA MESA TIENE CUENTA ABIERTA.');
+      return;
+    }
+    if (!confirm(`Eliminar mesa ${t.label}?`)) return;
+    try {
+      await deleteTable(t.id);
+      refresh();
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  // One-tap adoption for tabs opened before the 422 rule: register the
+  // legacy name in the hub so future bills open against a hub-owned row.
+  const registerTable = async (label: string) => {
+    try {
+      await createTable(label);
       refresh();
     } catch (err) {
       fail(err);
@@ -195,13 +249,13 @@ export default function App() {
   };
 
   const closeTab = async (tab: Tab) => {
-    if (!confirm(`Cerrar mesa ${tab.table_id} por ${money(tab.total_cents)}?`)) return;
+    if (!confirm(`Cerrar mesa ${labelOf(tab.table_id)} por ${money(tab.total_cents)}?`)) return;
     try {
       const sale = await api<{ table_id: string; total_cents: number }>(
         'POST',
         `/api/tabs/${encodeURIComponent(tab.id)}/close`,
       );
-      showToast(`Mesa ${sale.table_id} cobrada: ${money(sale.total_cents)}.`);
+      showToast(`Mesa ${labelOf(sale.table_id)} cobrada: ${money(sale.total_cents)}.`);
       refresh();
     } catch (err) {
       fail(err);
@@ -255,6 +309,19 @@ export default function App() {
 
   // KPI strip reads only already-fetched state: no extra requests.
   const openCount = tabs.length;
+  const freeTables = tables.filter((t) => !t.occupied);
+  // Tabs opened before the hub owned the names carry the legacy free-text
+  // id; anything outside hub ids AND labels is unregistered.
+  const knownTableKeys = new Set<string>();
+  tables.forEach((t) => {
+    knownTableKeys.add(t.id);
+    knownTableKeys.add(t.label);
+  });
+
+  // Drop a stale ABRIR selection once its table leaves the free list.
+  useEffect(() => {
+    if (openTableId && !freeTables.some((t) => t.id === openTableId)) setOpenTableId('');
+  }, [tables, openTableId, freeTables]);
   const inProgressCents = tabs.reduce((sum, t) => sum + t.total_cents, 0);
   const availableCount = catalog.filter((p) => p.available).length;
 
@@ -352,7 +419,7 @@ export default function App() {
                           className="money flex items-baseline justify-between gap-2 border-b border-mitt-raised py-1 text-mitt-text"
                         >
                           <span>
-                            Mesa {t.table_id}{' '}
+                            Mesa {labelOf(t.table_id)}{' '}
                             <span className="text-xs text-mitt-muted">
                               · {(t.items || []).length} consumo{(t.items || []).length === 1 ? '' : 's'}
                             </span>
@@ -383,36 +450,110 @@ export default function App() {
                 </p>
               </div>
               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-mitt-surface p-3">
-                <input
+                <select
                   className={inputCls}
-                  type="text"
-                  placeholder="Mesa (ej. T1)"
-                  size={12}
-                  value={tableName}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  onChange={(e) => setTableName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') openTable();
-                  }}
-                />
-                <button type="button" className={btnPrimary} onClick={openTable}>
+                  value={openTableId}
+                  aria-label="Mesa libre para abrir"
+                  onChange={(e) => setOpenTableId(e.target.value)}
+                >
+                  <option value="">Mesa libre…</option>
+                  {freeTables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={btnPrimary}
+                  onClick={openTable}
+                  disabled={freeTables.length === 0}
+                >
                   ABRIR MESA
                 </button>
+                {tables.length === 0 ? (
+                  <span className="text-xs text-mitt-muted">
+                    Registre la primera mesa abajo para empezar.
+                  </span>
+                ) : (
+                  freeTables.length === 0 && (
+                    <span className="text-xs text-mitt-muted">
+                      Sin mesas libres. Cierre una cuenta para liberar.
+                    </span>
+                  )
+                )}
+              </div>
+              <div className="mb-2 rounded-xl bg-mitt-surface p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className={inputCls}
+                    type="text"
+                    placeholder="Nombre"
+                    size={12}
+                    value={newTableName}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    aria-label="Nombre de la mesa nueva"
+                    onChange={(e) => setNewTableName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addTable();
+                    }}
+                  />
+                  <button type="button" className={btnPrimary} onClick={addTable}>
+                    AGREGAR MESA
+                  </button>
+                </div>
+                {tables.length === 0 ? (
+                  <p className="mt-2 text-sm text-mitt-muted">Sin mesas registradas.</p>
+                ) : (
+                  <ul className="mt-2 list-none p-0">
+                    {tables.map((t) => (
+                      <li
+                        key={t.id}
+                        className="money flex flex-wrap items-center justify-between gap-2 border-b border-mitt-raised py-1 text-mitt-text"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className={`mitt-dot${t.occupied ? '' : ' ok'}`} aria-hidden="true" />
+                          <strong>{t.label}</strong>
+                          <span className="text-xs text-mitt-muted">
+                            {t.occupied ? 'Ocupada' : 'Libre'}
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-2">
+                          {t.occupied && (
+                            <span className="text-xs text-mitt-muted">Con cuenta abierta</span>
+                          )}
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            disabled={t.occupied}
+                            title={
+                              t.occupied ? 'La mesa tiene cuenta abierta' : `Eliminar mesa ${t.label}`
+                            }
+                            onClick={() => removeTable(t)}
+                          >
+                            ELIMINAR
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               {tabs.length === 0 ? (
                 <div className={`${cardCls} text-center`}>
                   <p className="font-semibold text-mitt-text">La barra está libre</p>
                   <p className="mt-1 text-sm text-mitt-muted">
-                    Abra la primera mesa con el nombre de arriba para empezar a vender.
+                    Elija una mesa libre arriba para empezar a vender.
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {tabs.map((t, i) => {
                     const sel = addSelection[t.id] || { productId: '', qty: '1' };
+                    const registered = knownTableKeys.has(t.table_id);
                     return (
                       <SpotlightCard
                         key={t.id}
@@ -422,10 +563,24 @@ export default function App() {
                           className="mitt-enter relative"
                           style={{ animationDelay: `${Math.min(i * 50, 250)}ms` }}
                         >
-                          <strong className="text-mitt-text">Mesa {t.table_id}</strong>{' '}
+                          <strong className="text-mitt-text">Mesa {labelOf(t.table_id)}</strong>{' '}
                           <span className="text-xs text-mitt-muted">
                             Ocupada · <span className="money">{money(t.total_cents)}</span>
                           </span>
+                          {!registered && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-mitt-muted">
+                                Mesa sin registrar en el hub.
+                              </span>
+                              <button
+                                type="button"
+                                className={btnGhost}
+                                onClick={() => registerTable(t.table_id)}
+                              >
+                                REGISTRAR MESA
+                              </button>
+                            </div>
+                          )}
                           <ul className="my-2 list-none p-0">
                             {(t.items || []).length === 0 && (
                               <li className="text-xs text-mitt-muted">Sin consumos.</li>
@@ -449,7 +604,7 @@ export default function App() {
                             <select
                               className={inputCls}
                               value={sel.productId}
-                              aria-label={`Producto para mesa ${t.table_id}`}
+                              aria-label={`Producto para mesa ${labelOf(t.table_id)}`}
                               onChange={(e) =>
                                 setAddSelection((s) => ({
                                   ...s,
@@ -467,7 +622,7 @@ export default function App() {
                             <input
                               className={`${inputCls} w-20`}
                               type="number"
-                              aria-label={`Cantidad para mesa ${t.table_id}`}
+                              aria-label={`Cantidad para mesa ${labelOf(t.table_id)}`}
                               value={sel.qty}
                               min={1}
                               step={1}

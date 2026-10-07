@@ -47,6 +47,14 @@ export interface Pairing {
   pairing_code: string;
 }
 
+// Hub-owned table row (GET/POST/DELETE /api/tables). Occupied is derived
+// server-side from open tabs at read time, never stored.
+export interface Table {
+  id: string;
+  label: string;
+  occupied: boolean;
+}
+
 export interface ApiError {
   status: number;
   message: string;
@@ -63,13 +71,20 @@ export function storedToken(): string {
 function failMessage(status: number, body: string): string {
   if (status === 401 || status === 403) return 'Token inválido. Revise la conexión.';
   if (status === 404) return 'No encontrado. Pulse REFRESCAR.';
+  let code = '';
   let detail = '';
   try {
     const parsed = JSON.parse(body || '');
-    if (parsed && parsed.error && parsed.error.message) detail = String(parsed.error.message);
+    if (parsed && parsed.error) {
+      if (parsed.error.code) code = String(parsed.error.code);
+      if (parsed.error.message) detail = String(parsed.error.message);
+    }
   } catch {
     detail = '';
   }
+  // The hub refuses table deletes while the bill is open; staff get the
+  // reason, not a code.
+  if (status === 409 && code === 'table_occupied') return 'LA MESA TIENE CUENTA ABIERTA.';
   if (status === 422) return detail ? `Dato inválido: ${detail}` : 'Dato inválido. Revise el formulario.';
   return `Ocurrió un error (código ${status}). Intente de nuevo.`;
 }
@@ -85,6 +100,8 @@ export async function api<T>(method: string, path: string, data?: unknown): Prom
   const res = await fetch(baseUrl() + path, init);
   const text = await res.text();
   if (!res.ok) throw new Error(failMessage(res.status, text));
+  // DELETE answers 204 with no body; every other call returns JSON.
+  if (!text) return undefined as T;
   return JSON.parse(text) as T;
 }
 
@@ -119,4 +136,19 @@ export function readPairing(raw: string): { token: string; base: string | null }
 // Money: integer cents to "$ 12.50" display (no float math on totals).
 export function money(cents: number): string {
   return '$ ' + (cents / 100).toFixed(2);
+}
+
+// Hub-owned tables: the hub is the single source of truth, the web UI only
+// lists, creates, and deletes rows through these helpers.
+export async function listTables(): Promise<Table[]> {
+  const res = await api<{ tables: Table[] }>('GET', '/api/tables');
+  return res.tables || [];
+}
+
+export function createTable(label: string): Promise<Table> {
+  return api<Table>('POST', '/api/tables', { label });
+}
+
+export async function deleteTable(id: string): Promise<void> {
+  await api<unknown>('DELETE', `/api/tables/${encodeURIComponent(id)}`);
 }

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,13 +11,27 @@ import (
 )
 
 // SaveTab upserts the tab header and replaces its items inside one
-// transaction, so a retry never leaves half-written lines behind.
+// transaction, so a retry never leaves half-written lines behind. Opening a
+// tab requires a known table row: the hub owns the tables, so callers
+// create the table first. Closing needs no such check, so settling an old
+// tab never strands the bill.
 func (s *Store) SaveTab(ctx context.Context, t domain.Tab) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("save tab %q: begin transaction: %w", t.ID, err)
 	}
 	defer tx.Rollback()
+	if t.Status == domain.TabOpen {
+		var one int
+		err := tx.QueryRowContext(ctx,
+			`SELECT 1 FROM tables_tbl WHERE id = ?`, t.TableID).Scan(&one)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("save tab %q: %w: %q", t.ID, ErrUnknownTable, t.TableID)
+		}
+		if err != nil {
+			return fmt.Errorf("save tab %q: check table: %w", t.ID, err)
+		}
+	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO tabs(id, table_id, status, opened_at)
 		VALUES(?, ?, ?, ?)

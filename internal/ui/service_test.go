@@ -36,10 +36,18 @@ func seedProducts(t *testing.T, s *store.Store, ps []domain.Product) {
 	}
 }
 
-// seedTabs saves every tab in tabs.
+// seedTabs saves every tab in tabs. Hub tables are created first because the
+// hub owns the tables: opening a tab requires a known table row.
 func seedTabs(t *testing.T, s *store.Store, tabs []domain.Tab) {
 	t.Helper()
 	ctx := context.Background()
+	for _, tab := range tabs {
+		if err := s.UpsertTable(ctx, domain.Table{
+			ID: tab.TableID, Label: tab.TableID, Status: domain.TableFree,
+		}); err != nil {
+			t.Fatalf("UpsertTable(%q) = %v, want nil", tab.TableID, err)
+		}
+	}
 	for _, tab := range tabs {
 		if err := s.SaveTab(ctx, tab); err != nil {
 			t.Fatalf("SaveTab(%q) = %v, want nil", tab.ID, err)

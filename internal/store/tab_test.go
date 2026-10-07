@@ -27,6 +27,7 @@ func tabFixture() domain.Tab {
 func TestSaveGetTabRoundtrip(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
+	seedTable(t, s, "t1", "T1")
 	want := tabFixture()
 
 	if err := s.SaveTab(ctx, want); err != nil {
@@ -58,6 +59,7 @@ func TestSaveGetTabRoundtrip(t *testing.T) {
 func TestSaveTabReplacesItems(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
+	seedTable(t, s, "t1", "T1")
 	tab := tabFixture()
 
 	if err := s.SaveTab(ctx, tab); err != nil {
@@ -95,6 +97,9 @@ func TestGetOpenTabMissing(t *testing.T) {
 func TestListOpenTabs(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
+	for _, id := range []string{"t1", "t2", "t3"} {
+		seedTable(t, s, id, "Table "+id)
+	}
 	older := tabFixture()
 	older.ID = "tab-old"
 	older.TableID = "t1"

@@ -209,6 +209,21 @@ func seedProduct(t *testing.T, h http.Handler, body string) string {
 	return id
 }
 
+// seedTable creates a hub table and returns its id.
+func seedTable(t *testing.T, h http.Handler, label string) string {
+	t.Helper()
+	rec := doRequest(t, h, http.MethodPost, "/api/tables",
+		fmt.Sprintf(`{"label":%q}`, label), testToken)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("seed table %s = %d, want 201 (%s)", label, rec.Code, rec.Body.String())
+	}
+	id, _ := decodeBody(t, rec)["id"].(string)
+	if id == "" {
+		t.Fatalf("seeded table has no id: %s", rec.Body.String())
+	}
+	return id
+}
+
 // openTab opens a tab for the table and returns its id.
 func openTab(t *testing.T, h http.Handler, table string) string {
 	t.Helper()
@@ -229,7 +244,7 @@ func TestTabOpenAddCloseTotals(t *testing.T) {
 	beer := seedProduct(t, h, `{"name":"Quilmes","price_cents":1500}`)
 	fernet := seedProduct(t, h, `{"name":"Fernet","price_cents":2500}`)
 
-	tabID := openTab(t, h, "T1")
+	tabID := openTab(t, h, seedTable(t, h, "T1"))
 
 	for _, item := range []struct {
 		product string
@@ -292,10 +307,12 @@ func TestTabValidation(t *testing.T) {
 		t.Fatalf("open empty table = %d, want 422", rec.Code)
 	}
 
-	emptyTab := openTab(t, h, "T-empty")
-	tab := openTab(t, h, "T1")
+	emptyTable := seedTable(t, h, "T-empty")
+	emptyTab := openTab(t, h, emptyTable)
+	table := seedTable(t, h, "T1")
+	tab := openTab(t, h, table)
 	// Idempotent reopen returns the same tab instead of duplicating it.
-	if rec := doRequest(t, h, http.MethodPost, "/api/tabs", `{"table_id":"T1"}`, testToken); rec.Code != http.StatusOK {
+	if rec := doRequest(t, h, http.MethodPost, "/api/tabs", fmt.Sprintf(`{"table_id":%q}`, table), testToken); rec.Code != http.StatusOK {
 		t.Fatalf("reopen = %d, want 200", rec.Code)
 	} else if id, _ := decodeBody(t, rec)["id"].(string); id != tab {
 		t.Fatalf("reopen id = %q, want %q", id, tab)

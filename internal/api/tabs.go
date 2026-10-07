@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mitt/internal/domain"
+	"mitt/internal/store"
 )
 
 // tabItemDTO is one order line on the wire. Unit price is a snapshot taken
@@ -72,11 +73,11 @@ type addItemRequest struct {
 	Qty       int    `json:"qty"`
 }
 
-// handleTabOpen serves POST /api/tabs. The table label must be non-empty per
-// domain.Table. The table identity persists on the tab row (tab.table_id);
-// tables_tbl seeding stays out of scope while the store exposes no table
-// writer. Opening an already-open table is idempotent and returns the
-// existing tab with 200 instead of duplicating it.
+// handleTabOpen serves POST /api/tabs. The table_id must reference a table
+// row created first via POST /api/tables: the hub owns the tables, so an
+// unknown id is a 422 unknown_table. Opening an already-open table is
+// idempotent and returns the existing tab with 200 instead of duplicating
+// it.
 func (s *Server) handleTabOpen(w http.ResponseWriter, r *http.Request) {
 	var req openTabRequest
 	if !decodeJSON(w, r, &req) {
@@ -84,6 +85,14 @@ func (s *Server) handleTabOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := (domain.Table{ID: req.TableID, Label: req.TableID, Status: domain.TableOccupied}).Validate(); err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "validation_error", err.Error())
+		return
+	}
+	if _, err := s.store.GetTable(r.Context(), req.TableID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusUnprocessableEntity, "unknown_table", "unknown table: create it first via POST /api/tables")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal", "lookup table")
 		return
 	}
 	if existing, err := s.store.GetOpenTabByTable(r.Context(), req.TableID); err == nil {
@@ -100,6 +109,10 @@ func (s *Server) handleTabOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	tab := domain.Tab{ID: id, TableID: req.TableID, Status: domain.TabOpen, OpenedAt: time.Now().UTC()}
 	if err := s.store.SaveTab(r.Context(), tab); err != nil {
+		if errors.Is(err, store.ErrUnknownTable) {
+			writeError(w, http.StatusUnprocessableEntity, "unknown_table", "unknown table: create it first via POST /api/tables")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "internal", "save tab")
 		return
 	}
