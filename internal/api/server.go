@@ -37,6 +37,9 @@ func New(s *store.Store, token, advertise, addr string) http.Handler {
 	mux.HandleFunc("POST /api/tabs/{id}/close", srv.handleTabClose)
 	mux.HandleFunc("GET /api/expenses", srv.handleExpensesList)
 	mux.HandleFunc("POST /api/expenses", srv.handleExpenseCreate)
+	mux.HandleFunc("GET /api/branding", srv.handleBrandingGet)
+	mux.HandleFunc("GET /api/branding/logo", srv.handleBrandingLogo)
+	mux.HandleFunc("PATCH /api/branding", srv.handleBrandingPatch)
 	// GET / serves the human dashboard: mux longest-match keeps every
 	// /api route first, and only the exact root path gets the page while any
 	// other unmatched path stays a 404. The outer handler also serves this
@@ -62,6 +65,13 @@ func New(s *store.Store, token, advertise, addr string) http.Handler {
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/favicon.ico" {
 			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// The login-less page paints before pairing, so the branding GETs
+		// bypass auth straight into the mux like GET /api/health does in
+		// the middleware. PATCH stays behind the pairing token.
+		if r.Method == http.MethodGet && (r.URL.Path == "/api/branding" || r.URL.Path == "/api/branding/logo") {
+			mux.ServeHTTP(w, r)
 			return
 		}
 		authed.ServeHTTP(w, r)

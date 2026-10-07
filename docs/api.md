@@ -1,7 +1,8 @@
 # LAN HTTP API
 
-Base URL: `http://<pc-lan-ip>:8080`. Every request except `GET /api/health`
-needs `Authorization: Bearer <pairing-token>`. The token comes from the
+Base URL: `http://<pc-lan-ip>:8080`. Every request except `GET /api/health`,
+`GET /api/branding`, and `GET /api/branding/logo` needs
+`Authorization: Bearer <pairing-token>`. The token comes from the
 `-token` flag, the `MITT_TOKEN` env var, or a random value printed once at
 startup. Every response (including errors) is `application/json` with the
 envelope `{"error":{"code","message"}}` on failures.
@@ -21,6 +22,9 @@ Money is in integer cents; expense `qty` may be fractional.
 | GET | /api/expenses | yes | — | 200 `{expenses}` oldest first |
 | POST | /api/expenses | yes | `{description, qty>0, cost_cents>=0}` | 201 expense, 400 bad JSON, 422 domain error |
 | GET | /api/pairing | yes | — | 200 `{url, pairing_code}`, 503 no LAN address |
+| GET | /api/branding | no | — | 200 `{shop_name, primary, accent, background, has_logo, updated_at}` |
+| GET | /api/branding/logo | no | — | 200 raw logo bytes (`Content-Type` = stored mime, immutable + ETag), 404 no logo |
+| PATCH | /api/branding | yes | `{shop_name?, primary?, accent?, background? (#rrggbb), logo_data_url? ("data:<mime>;base64,..." or null to clear)}` merged onto stored | 200 branding, 400 bad JSON, 413 logo over 512KiB, 422 domain error |
 
 Notes:
 

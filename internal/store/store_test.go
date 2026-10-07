@@ -52,6 +52,7 @@ func TestOpenMigrateIdempotent(t *testing.T) {
 		{"sales", "sales"},
 		{"sale items", "sale_items"},
 		{"expenses", "expenses"},
+		{"branding", "branding"},
 	}
 	for _, tt := range tables {
 		t.Run("table "+tt.name, func(t *testing.T) {

@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>mitt · Panel del bar</title>
+    <script>
+      // Pre-paint theme: persist the sidebar toggle, fall back to the OS
+      // preference, default to dark (night-bar-first). Runs before CSS so
+      // light users never see a dark flash. Branding vars paint later over
+      // either column and never depend on this value.
+      try {
+        var mittTheme = localStorage.getItem('mitt_theme');
+        if (mittTheme !== 'light' && mittTheme !== 'dark') {
+          mittTheme = window.matchMedia('(prefers-color-scheme: light)').matches
+            ? 'light'
+            : 'dark';
+        }
+        document.documentElement.dataset.theme = mittTheme;
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

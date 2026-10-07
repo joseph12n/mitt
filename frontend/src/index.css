@@ -14,6 +14,23 @@
   --mitt-on-accent: #1a1206; /* on-accent */
 }
 
+/* Daylight admin theme (docs/design-tokens.md — light column). The
+   pre-paint script in index.html sets data-theme before first paint, so
+   there is no dark flash for light users. Brand vars painted inline by
+   applyBranding() always win over both columns. */
+[data-theme='light'] {
+  --mitt-bg: #f5f3ec;
+  --mitt-surface: #ffffff;
+  --mitt-surface-raised: #edeae0;
+  --mitt-text: #1a1c1e;
+  --mitt-text-muted: #62676f;
+  --mitt-accent: #b97a1a;
+  --mitt-success: #2e7d46;
+  --mitt-warn: #9a6f14;
+  --mitt-danger: #b33737;
+  --mitt-on-accent: #ffffff;
+}
+
 @theme inline {
   --color-mitt-bg: var(--mitt-bg);
   --color-mitt-surface: var(--mitt-surface);
@@ -56,14 +73,14 @@ body {
 }
 
 .mitt-ambient::before {
-  background: radial-gradient(circle, #e8a33d 0%, transparent 65%); /* accent */
+  background: radial-gradient(circle, var(--mitt-accent) 0%, transparent 65%);
   top: -18vmax;
   left: -12vmax;
   animation: mitt-drift-a 26s ease-in-out infinite alternate;
 }
 
 .mitt-ambient::after {
-  background: radial-gradient(circle, #4caf6d 0%, transparent 65%); /* success */
+  background: radial-gradient(circle, var(--mitt-success) 0%, transparent 65%);
   bottom: -22vmax;
   right: -14vmax;
   animation: mitt-drift-b 32s ease-in-out infinite alternate;
@@ -94,14 +111,279 @@ body {
   }
 }
 
-/* Sticky operations top bar: opaque bar-surface so KPIs stay scannable. */
-.mitt-topbar {
+/* App shell: sticky left sidebar + content. Under 720px the same sidebar
+   node reflows into a top bar with a horizontal nav (structural collapse,
+   no duplicate nav, no fluid typography). */
+.mitt-shell {
+  display: flex;
+  align-items: stretch;
+}
+
+.mitt-sidebar {
   position: sticky;
   top: 0;
-  z-index: 20;
-  border-bottom: 1px solid var(--mitt-surface-raised);
-  background: rgba(18, 20, 23, 0.94);
-  backdrop-filter: blur(8px);
+  height: 100vh;
+  width: 248px;
+  flex: 0 0 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 12px;
+  border-right: 1px solid var(--mitt-surface-raised);
+  background: var(--mitt-surface);
+}
+
+.mitt-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  min-width: 0;
+}
+
+.mitt-brand img {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--mitt-surface-raised);
+}
+
+.mitt-brand-fallback {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 20px;
+  background: var(--mitt-accent);
+  color: var(--mitt-on-accent);
+}
+
+.mitt-brand-name {
+  font-weight: 700;
+  font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mitt-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Section nav: current section carries the accent edge + label (Operate:
+   selection is accent, never decoration). State-only motion, 160ms. */
+.mitt-navbtn {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  border-left-width: 3px;
+  background: transparent;
+  color: var(--mitt-text);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, transform 160ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mitt-navbtn:hover {
+    background: var(--mitt-surface-raised);
+  }
+}
+
+.mitt-navbtn:active {
+  transform: scale(0.98);
+}
+
+.mitt-navbtn[aria-current='page'] {
+  background: var(--mitt-surface-raised);
+  border-left-color: var(--mitt-accent);
+}
+
+.mitt-side-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mitt-side-foot .mitt-press {
+  min-height: 48px;
+  justify-content: center;
+}
+
+.mitt-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 8px;
+  min-height: 32px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mitt-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 9999px;
+  background: var(--mitt-danger);
+}
+
+.mitt-dot.ok {
+  background: var(--mitt-success);
+}
+
+.mitt-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mitt-content {
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: 0 16px 32px;
+}
+
+/* Personalizar: color rows pair the native picker with its hex field so
+   bar staff can tap a swatch or paste an exact brand hex. */
+.mitt-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mitt-color-label {
+  width: 72px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mitt-text);
+}
+
+input[type='color'].mitt-swatch {
+  width: 48px;
+  height: 48px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--mitt-surface-raised);
+  background: var(--mitt-surface-raised);
+  cursor: pointer;
+}
+
+.mitt-field-error {
+  font-size: 12px;
+  color: var(--mitt-danger);
+  font-weight: 600;
+}
+
+/* Preview mini: paints the draft palette inline so saving is never blind. */
+.mitt-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--mitt-surface-raised);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--mitt-bg);
+}
+
+.mitt-preview img {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: rgba(127, 127, 127, 0.15);
+}
+
+.mitt-preview-nologo {
+  font-size: 12px;
+  color: var(--mitt-text-muted);
+}
+
+.mitt-preview strong {
+  color: var(--mitt-text);
+}
+
+.mitt-preview-swatches {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.mitt-preview-swatches span {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+}
+
+.mitt-preview-cta {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mitt-on-accent);
+  background: var(--mitt-accent);
+}
+
+@media (max-width: 719px) {
+  .mitt-shell {
+    flex-direction: column;
+  }
+
+  .mitt-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: auto;
+    flex: none;
+    height: auto;
+    padding: 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--mitt-surface-raised);
+  }
+
+  .mitt-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .mitt-navbtn {
+    white-space: nowrap;
+    border-left-width: 1px;
+    border-bottom-width: 3px;
+  }
+
+  .mitt-navbtn[aria-current='page'] {
+    border-left-color: transparent;
+    border-bottom-color: var(--mitt-accent);
+    border-radius: 8px 8px 0 0;
+  }
+
+  .mitt-side-foot {
+    margin-top: 0;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .mitt-pill {
+    margin-right: auto;
+  }
 }
 
 /* Press feedback: instant tactile confirm on every button (150ms ease-out). */
@@ -177,6 +459,14 @@ body {
   }
 
   .mitt-press:active {
+    transform: none;
+  }
+
+  .mitt-navbtn {
+    transition: none;
+  }
+
+  .mitt-navbtn:active {
     transform: none;
   }
 }
