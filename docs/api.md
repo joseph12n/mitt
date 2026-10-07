@@ -20,6 +20,7 @@ Money is in integer cents; expense `qty` may be fractional.
 | POST | /api/tabs/{id}/close | yes | — | 200 sale `{id, table_id, items, total_cents, closed_at}`, 404 unknown tab, 422 empty tab |
 | GET | /api/expenses | yes | — | 200 `{expenses}` oldest first |
 | POST | /api/expenses | yes | `{description, qty>0, cost_cents>=0}` | 201 expense, 400 bad JSON, 422 domain error |
+| GET | /api/pairing | yes | — | 200 `{url, pairing_code}`, 503 no LAN address |
 
 Notes:
 

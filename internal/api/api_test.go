@@ -27,7 +27,7 @@ func openTestAPI(t *testing.T, token string) (http.Handler, *store.Store) {
 			t.Fatalf("Close() = %v, want nil", err)
 		}
 	})
-	return New(s, token), s
+	return New(s, token, "", ":8080"), s
 }
 
 // doRequest performs one JSON request against the handler.

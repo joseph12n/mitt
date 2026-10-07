@@ -34,3 +34,9 @@ Thumbs.db
 
 # Local ODD planning mirror (kept in Engram, not in git)
 /odd/
+
+# Web UI build output (rebuilt by `make web-build`; only .gitkeep is tracked)
+node_modules/
+frontend/dist/
+internal/web/static/dist/*
+!internal/web/static/dist/.gitkeep

@@ -57,6 +57,7 @@ func defaultDBPath() string {
 func main() {
 	dbFlag := flag.String("db", "", "path to sqlite database (default mitt.db next to binary)")
 	addrFlag := flag.String("addr", ":8080", "LAN listen address")
+	advertiseFlag := flag.String("advertise", "", "public base URL shown in QR, e.g. http://192.168.1.20:8080; empty = auto-detect LAN IP")
 	tokenFlag := flag.String("token", "", "pairing token (default MITT_TOKEN env or random)")
 	uiFlag := flag.String("ui", "none", "UI mode: none (serve LAN API) or snapshot (print text dashboard and exit)")
 	flag.Parse()
@@ -96,7 +97,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              *addrFlag,
-		Handler:           api.New(s, token),
+		Handler:           api.New(s, token, *advertiseFlag, *addrFlag),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {

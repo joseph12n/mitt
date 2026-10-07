@@ -129,7 +129,7 @@ make build-windows  # ./mitt-windows-amd64.exe
 Single static-ish binaries (Go + pure-Go SQLite, no CGO), so they run from
 Windows 10 up and on any mainstream Linux distro with no extra runtime.
 
-### Install on Fedora / Debian-Ubuntu (v0.1.2)
+### Install on Fedora / Debian-Ubuntu (v0.1.3)
 
 ```bash
 make pkg  # needs nfpm on PATH; builds dist/*.rpm and dist/*.deb, no root
@@ -138,13 +138,13 @@ make pkg  # needs nfpm on PATH; builds dist/*.rpm and dist/*.deb, no root
 Fedora:
 
 ```bash
-sudo dnf install ./dist/mitt-0.1.2-1.x86_64.rpm
+sudo dnf install ./dist/mitt-0.1.3-1.x86_64.rpm
 ```
 
 Debian/Ubuntu:
 
 ```bash
-sudo apt install ./dist/mitt_0.1.2_amd64.deb
+sudo apt install ./dist/mitt_0.1.3_amd64.deb
 ```
 
 Then enable the service and read the pairing token from the logs:
@@ -158,7 +158,7 @@ The package adds a **mitt Bar** launcher to the app menu: it opens the dashboard
 in the browser (`http://localhost:8080/`) with tables, catalog, tabs and expenses.
 Paste the journal token once — the page remembers it.
 
-Data lives in `/var/lib/mitt`. Packages are unsigned v0.1.2 builds; set a
+Data lives in `/var/lib/mitt`. Packages are unsigned v0.1.3 builds; set a
 fixed token with `sudo systemctl edit mitt` (`Environment=MITT_TOKEN=...`).
 
 ## Project layout
@@ -204,6 +204,8 @@ Open source — adjust it to your bar's needs. Conventions:
 - Conventional Commits (`feat:`, `fix:`, `docs:`, …), one work unit per commit.
 - Tests travel with behavior: `go test ./...` must stay green.
 - Keep the core UI-agnostic: new screens plug into `internal/ui`, never into domain.
+- Node 20+ is only needed to build the web UI (`make web-build`, sources in
+  `frontend/`); releases ship the dashboard embedded in the binary.
 
 ## Limitations
 

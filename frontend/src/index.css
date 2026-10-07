@@ -1,0 +1,107 @@
+@import 'tailwindcss';
+
+/* mitt design tokens, dark-first (docs/design-tokens.md — copy 1:1, dark column). */
+:root {
+  --mitt-bg: #121417; /* bg */
+  --mitt-surface: #1c1f24; /* surface */
+  --mitt-surface-raised: #262b33; /* surface-raised */
+  --mitt-text: #f2efe6; /* text */
+  --mitt-text-muted: #9aa1ad; /* text-muted */
+  --mitt-accent: #e8a33d; /* accent */
+  --mitt-success: #4caf6d; /* success */
+  --mitt-warn: #e0b13e; /* warn */
+  --mitt-danger: #e05c5c; /* danger */
+  --mitt-on-accent: #1a1206; /* on-accent */
+}
+
+@theme inline {
+  --color-mitt-bg: var(--mitt-bg);
+  --color-mitt-surface: var(--mitt-surface);
+  --color-mitt-raised: var(--mitt-surface-raised);
+  --color-mitt-text: var(--mitt-text);
+  --color-mitt-muted: var(--mitt-text-muted);
+  --color-mitt-accent: var(--mitt-accent);
+  --color-mitt-success: var(--mitt-success);
+  --color-mitt-warn: var(--mitt-warn);
+  --color-mitt-danger: var(--mitt-danger);
+  --color-mitt-on-accent: var(--mitt-on-accent);
+}
+
+html,
+body {
+  background: var(--mitt-bg);
+  color: var(--mitt-text);
+}
+
+/* Night-bar ambience: pure-CSS drifting amber/green glow behind the board.
+   (ReactBits animated backgrounds all require three/ogl/gsap, so the motion
+   here is hand-rolled keyframes — zero extra dependencies, offline-safe.) */
+.mitt-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--mitt-bg);
+}
+
+.mitt-ambient::before,
+.mitt-ambient::after {
+  content: '';
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.16;
+}
+
+.mitt-ambient::before {
+  background: radial-gradient(circle, #e8a33d 0%, transparent 65%); /* accent */
+  top: -18vmax;
+  left: -12vmax;
+  animation: mitt-drift-a 26s ease-in-out infinite alternate;
+}
+
+.mitt-ambient::after {
+  background: radial-gradient(circle, #4caf6d 0%, transparent 65%); /* success */
+  bottom: -22vmax;
+  right: -14vmax;
+  animation: mitt-drift-b 32s ease-in-out infinite alternate;
+}
+
+@keyframes mitt-drift-a {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(9vmax, 7vmax) scale(1.15);
+  }
+}
+
+@keyframes mitt-drift-b {
+  from {
+    transform: translate(0, 0) scale(1.1);
+  }
+  to {
+    transform: translate(-8vmax, -6vmax) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mitt-ambient::before,
+  .mitt-ambient::after {
+    animation: none;
+  }
+}
+
+/* Money: mono-numeric tabular figures so columns align (token mono-numeric). */
+.money {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  font-family:
+    system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px; /* body */
+}

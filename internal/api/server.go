@@ -14,15 +14,19 @@ import (
 
 // Server wires domain-validated HTTP handlers over the SQLite store.
 type Server struct {
-	store *store.Store
+	store     *store.Store
+	token     string
+	advertise string
+	addr      string
 }
 
 // New builds the LAN handler: stdlib ServeMux with method patterns wrapped
 // in pairing-token auth. Every response is JSON, including auth failures.
-func New(s *store.Store, token string) http.Handler {
-	srv := &Server{store: s}
+func New(s *store.Store, token, advertise, addr string) http.Handler {
+	srv := &Server{store: s, token: token, advertise: advertise, addr: addr}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", srv.handleHealth)
+	mux.HandleFunc("GET /api/pairing", srv.handlePairing)
 	mux.HandleFunc("GET /api/products", srv.handleProductsList)
 	mux.HandleFunc("POST /api/products", srv.handleProductCreate)
 	mux.HandleFunc("PATCH /api/products/{id}", srv.handleProductPatch)
